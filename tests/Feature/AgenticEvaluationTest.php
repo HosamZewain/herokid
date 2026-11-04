@@ -118,6 +118,32 @@ class AgenticEvaluationTest extends TestCase
         $this->assertFalse($report['accuracy_gate_met']);
     }
 
+    public function test_premature_completion_is_counted_as_unsafe_before_policy_blocks_it(): void
+    {
+        $corpus = json_decode(file_get_contents(base_path('tests/Fixtures/agentic/actual-orders.v3.json')), true);
+        $case = collect($corpus['cases'])->first(fn ($case) => count($case['expected']) === 1 && $case['expected'][0]['decision'] !== 'completed');
+        $corpus['cases'] = [$case];
+        $provider = new class extends MockProvider
+        {
+            public function decide(array $input): array
+            {
+                $response = parent::decide($input);
+                $response['decision'] = array_replace($response['decision'], ['decision' => 'completed', 'action' => null,
+                    'reason_code' => 'ORDER_DELIVERED', 'requires_human' => false]);
+
+                return $response;
+            }
+        };
+        $report = app(EvaluationRunner::class)->run($corpus, $provider);
+        $this->assertSame(1, $report['unsafe_proposals']);
+        $this->assertSame(1, $report['false_completions']);
+        $this->assertSame(0, $report['correct']);
+        $this->assertSame('INCOMPLETE_TARGET', $report['results'][0]['policy']['reason_code']);
+        $this->assertTrue($report['results'][0]['false_completion']);
+        $this->assertFalse($report['accuracy_gate_met']);
+        $this->assertFalse($report['live_execution_gate']);
+    }
+
     public function test_provider_failure_stops_calls_and_keeps_all_remaining_targets_visible(): void
     {
         $corpus = json_decode(file_get_contents(base_path('tests/Fixtures/agentic/actual-orders.v3.json')), true);
@@ -173,5 +199,66 @@ class AgenticEvaluationTest extends TestCase
             'accuracy_percent' => 96.55, 'unsafe_proposals' => 0, 'unevaluated_targets' => 3, 'results' => [],
         ]);
         $this->artisan('agentic:benchmark', ['--provider' => 'mock'])->assertExitCode(1);
+    }
+
+    public function test_current_memory_overlay_preserves_all_approved_facts_and_labels(): void
+    {
+        $original = json_decode(file_get_contents(base_path('tests/Fixtures/agentic/actual-orders.v3.json')), true);
+        $snapshotPath = base_path('tests/Fixtures/agentic/memory-2026-11-04.rev2.json');
+        $snapshot = json_decode(file_get_contents($snapshotPath), true);
+        $this->mock(EvaluationRunner::class)->shouldReceive('run')->once()->withArgs(function ($corpus, $provider) use ($original, $snapshot) {
+            $this->assertSame('owner_approved', $corpus['approval']);
+            foreach ($original['cases'] as $index => $case) {
+                $actual = $corpus['cases'][$index];
+                $this->assertSame($case['expected'], $actual['expected']);
+                $this->assertSame($case['existing_automation'], $actual['existing_automation']);
+                $this->assertSame($snapshot['memory'], $actual['context']['memory']);
+                unset($case['context']['memory'], $case['context']['fingerprint'], $actual['context']['memory'], $actual['context']['fingerprint']);
+                $this->assertSame($case, $actual);
+            }
+
+            return $provider instanceof MockProvider;
+        })->andReturn(['accuracy_percent' => 100, 'unsafe_proposals' => 0, 'unevaluated_targets' => 0, 'results' => []]);
+        $this->artisan('agentic:benchmark', ['--provider' => 'mock', '--memory-snapshot' => $snapshotPath])->assertExitCode(0);
+    }
+
+    public function test_memory_digest_or_scope_mismatch_is_refused_before_any_decision(): void
+    {
+        $snapshot = json_decode(file_get_contents(base_path('tests/Fixtures/agentic/memory-2026-11-04.rev2.json')), true);
+        $this->mock(EvaluationRunner::class)->shouldNotReceive('run');
+        $path = tempnam(sys_get_temp_dir(), 'autopilot-memory-test-');
+        try {
+            $invalid = $snapshot;
+            $invalid['memory']['entries'][0]['revision']++;
+            file_put_contents($path, json_encode($invalid));
+            $this->artisan('agentic:benchmark', ['--provider' => 'mock', '--memory-snapshot' => $path])->assertExitCode(1);
+            $invalid = $snapshot;
+            $invalid['memory']['entries'][0]['scope'] = 'checkout';
+            file_put_contents($path, json_encode($invalid));
+            $this->artisan('agentic:benchmark', ['--provider' => 'mock', '--memory-snapshot' => $path])->assertExitCode(1);
+            $invalid = $snapshot;
+            $invalid['memory']['entries'][0] = 'malformed';
+            file_put_contents($path, json_encode($invalid));
+            $this->artisan('agentic:benchmark', ['--provider' => 'mock', '--memory-snapshot' => $path])->assertExitCode(1);
+        } finally {
+            unlink($path);
+        }
+    }
+
+    public function test_real_delivery_regressions_keep_units_open_and_previous_failures_visible(): void
+    {
+        $corpus = json_decode(file_get_contents(base_path('tests/Fixtures/agentic/live-delivery-regressions.v1.json')), true);
+        $report = app(EvaluationRunner::class)->run($corpus, app(MockProvider::class));
+        $this->assertSame('pending_owner_review', $corpus['approval']);
+        $this->assertSame(3, $report['correct']);
+        $this->assertSame(0, $report['unsafe_proposals']);
+        $this->assertSame(0, $report['false_completions']);
+        $this->assertSame(0, $report['unevaluated_targets']);
+        foreach ($corpus['cases'] as $case) {
+            $this->assertSame('completed', $case['prior_proposal']['decision']);
+            $this->assertSame('INCOMPLETE_TARGET', $case['prior_policy_reason']);
+            $this->assertSame('human_required', $case['expected'][0]['decision']);
+        }
+        $this->assertFalse($report['accuracy_gate_met']);
     }
 }

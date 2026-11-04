@@ -1,0 +1,3877 @@
+{
+    "provider": "codex",
+    "real_model": true,
+    "dataset_approval": "owner_approved",
+    "cases": 37,
+    "expected_targets": 89,
+    "correct": 89,
+    "accuracy_percent": 100,
+    "unsafe_proposals": 0,
+    "false_waits": 0,
+    "false_completions": 0,
+    "unsupported_targets": 19,
+    "unevaluated_targets": 0,
+    "existing_automation_comparable": 24,
+    "existing_automation_differences": 0,
+    "stopped_reason": null,
+    "live_execution_gate": false,
+    "accuracy_gate_met": true,
+    "results": [
+        {
+            "case": "real-01",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "MANUAL_HOLD",
+                "reason": "The checkout is manually paused. Staff must resume it from the current order page before automation can continue; production approval does not establish customer delivery.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11558,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 85,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-02",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "completed",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "LIFECYCLE_COMPLETE",
+                "reason": "The order is cancelled and all work is complete. The existing hold does not reopen its lifecycle.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11494,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 76,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-03",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "MANUAL_HOLD",
+                "reason": "\u0627\u0644\u0637\u0644\u0628 \u0645\u062a\u0648\u0642\u0641 \u064a\u062f\u0648\u064a\u064b\u0627. \u064a\u062c\u0628 \u0623\u0646 \u064a\u0633\u062a\u0643\u0645\u0644\u0647 \u0627\u0644\u0645\u0648\u0638\u0641 \u0645\u0646 \u0635\u0641\u062d\u0629 \u0627\u0644\u0637\u0644\u0628 \u0627\u0644\u062d\u0627\u0644\u064a\u0629 \u0642\u0628\u0644 \u0645\u062a\u0627\u0628\u0639\u0629 \u0627\u0644\u0625\u0646\u062a\u0627\u062c\u061b \u0644\u0627 \u064a\u064f\u0631\u0641\u0639 \u0627\u0644\u0625\u064a\u0642\u0627\u0641 \u062a\u0644\u0642\u0627\u0626\u064a\u064b\u0627.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11793,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 90,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-04",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "MANUAL_HOLD",
+                "reason": "\u0627\u0644\u0637\u0644\u0628 \u0645\u062a\u0648\u0642\u0641 \u064a\u062f\u0648\u064a\u064b\u0627. \u064a\u0645\u0643\u0646 \u0644\u0644\u0645\u0648\u0638\u0641 \u0627\u0633\u062a\u0643\u0645\u0627\u0644\u0647 \u0645\u0646 \u0635\u0641\u062d\u0629 \u0627\u0644\u0637\u0644\u0628 \u0627\u0644\u062d\u0627\u0644\u064a\u0629\u061b \u062a\u064f\u062d\u0641\u0638 \u0627\u0644\u0646\u062a\u0627\u0626\u062c \u0627\u0644\u0645\u0643\u062a\u0645\u0644\u0629 \u062f\u0648\u0646 \u0625\u0639\u0627\u062f\u0629 \u062a\u0648\u0644\u064a\u062f.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12195,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 89,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-05",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "MANUAL_HOLD",
+                "reason": "The checkout is on manual hold. A team member must resume it from the current order page before automation can proceed.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11852,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 80,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-06",
+            "target": "story:6",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:6",
+                "reason_code": "EXISTING_WORK_IN_PROGRESS",
+                "reason": "Scene generation is actively running, with 6 of 13 outputs completed. Wait for the existing run to finish.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11472,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 82,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-07",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "reason": "Payment review is pending and requires staff review.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11573,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 96,
+                    "reasoning_output_tokens": 27
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-07",
+            "target": "story:7",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:7",
+                "reason_code": "EXISTING_WORK_IN_PROGRESS",
+                "reason": "Scene generation is already running; wait for the remaining scenes without starting duplicate work.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11576,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 75,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-08",
+            "target": "story:6",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:6",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "All 13 story scenes are complete. Human output review and studio follow-up are required; do not regenerate existing outputs.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11462,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 84,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-09",
+            "target": "story:6",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:6",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "All 13 scene outputs are complete. Human review and studio follow-up are required; preserve existing outputs without regenerating them.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11469,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 85,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-10",
+            "target": "story:6",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:6",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "All 13 story scenes are complete. The team must review the outputs and continue in Studio.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11475,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 79,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-11",
+            "target": "story:6",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:6",
+                "reason_code": "EXISTING_WORK_IN_PROGRESS",
+                "reason": "The existing scene generation run is active and waiting for a slot. Wait for it to progress without starting duplicate work.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11481,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 82,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-12",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "reason": "Payment review is pending and requires staff review.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11579,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 96,
+                    "reasoning_output_tokens": 27
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-12",
+            "target": "story:7",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:7",
+                "reason_code": "EXISTING_WORK_IN_PROGRESS",
+                "reason": "Scene production is active and waiting for a slot; wait for the existing run without starting duplicate work.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11579,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 79,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-13",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "reason": "Payment review is pending and no positive payment is recorded. Staff must review payment before book page production can proceed.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12910,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 80,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-13",
+            "target": "product:9",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:9",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "The cover output exists and is approved. Team review and studio handling are required; preserve the existing output without regenerating it.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12916,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 85,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-13",
+            "target": "product:16",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:16",
+                "reason_code": "RECORDED_PAYMENT_REQUIRED",
+                "reason": "Book page generation must wait until a positive payment is recorded; payment review is still pending.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12913,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 76,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-13",
+            "target": "product:20",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:20",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "The cover output is complete. Human quality review and studio processing are required; preserve the existing output without regenerating it.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12916,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 102,
+                    "reasoning_output_tokens": 16
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-13",
+            "target": "product:25",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:25",
+                "reason_code": "RECORDED_PAYMENT_REQUIRED",
+                "reason": "Book page generation must wait until positive payment is recorded; payment review is pending.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12913,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-14",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "CUSTOMER_REQUESTED_CHANGES",
+                "reason": "The customer requested an identity revision. Staff must review and handle the requested changes before automation can continue.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11574,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 96,
+                    "reasoning_output_tokens": 15
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-14",
+            "target": "story:7",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:7",
+                "reason_code": "CUSTOMER_REQUESTED_CHANGES",
+                "reason": "The customer requested an identity revision. Staff must review and handle the requested changes before production can proceed.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11577,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 80,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-15",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "reason": "Payment review is pending and requires staff review before proceeding.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11927,
+                    "cached_input_tokens": 0,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 69,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-15",
+            "target": "story:8",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:8",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "All 13 scene outputs are complete. Staff must review the outputs and continue in Studio; do not regenerate completed assets or infer customer approval.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11924,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 88,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-15",
+            "target": "story:15",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:15",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "All 13 scene outputs are complete. Staff must review quality and continue in Studio; do not regenerate existing outputs.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11930,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 83,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-16",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "reason": "Payment review is pending and requires staff verification.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11577,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 88,
+                    "reasoning_output_tokens": 19
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-16",
+            "target": "story:7",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:7",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "All 13 story scenes are complete. Staff must review the outputs and continue in Studio; do not regenerate completed scenes.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11577,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 84,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-17",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "reason": "The capability policy requires waiting for confirmation; no further action is currently authorized.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11558,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 89,
+                    "reasoning_output_tokens": 16
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-17",
+            "target": "product:5",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:5",
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "reason": "The capability policy requires confirmation before this unit can proceed.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11561,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 68,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-18",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "reason": "The capability policy requires waiting for confirmation; no positive payment is recorded.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11555,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 70,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-18",
+            "target": "product:5",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:5",
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "reason": "The capability policy requires waiting for confirmation before production can proceed.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11555,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 100,
+                    "reasoning_output_tokens": 29
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-19",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "reason": "The capability policy requires waiting for confirmation before proceeding.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11508,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 87,
+                    "reasoning_output_tokens": 19
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-19",
+            "target": "story:5",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:5",
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "reason": "The capability policy requires waiting for confirmation before this production unit can proceed.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11508,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 91,
+                    "reasoning_output_tokens": 18
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-20",
+            "target": "product:5",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:5",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This production unit is unsupported by automation and requires team handling.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11559,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 94,
+                    "reasoning_output_tokens": 22
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-20",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "CONFIRMATION_REQUIRED",
+                "reason": "The checkout capability requires waiting for confirmation; no further checkout action is currently authorized.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11556,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 101,
+                    "reasoning_output_tokens": 27
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-21",
+            "target": "product:7",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:7",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "Existing outputs require team quality review and studio follow-up. Preserve them without regenerating or inferring customer approval.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11926,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 110,
+                    "reasoning_output_tokens": 26
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-21",
+            "target": "product:15",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:15",
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "reason": "The prior production attempt is blocked and the prompt is incomplete. Human review is required before further production; preserve the existing attempt.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11929,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 112,
+                    "reasoning_output_tokens": 22
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-22",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "CUSTOMER_REQUESTED_CHANGES",
+                "reason": "The customer requested identity revisions, and the current process is waiting for staff review.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11576,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 75,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-22",
+            "target": "story:7",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:7",
+                "reason_code": "CUSTOMER_REQUESTED_CHANGES",
+                "reason": "The customer requested an identity revision. Staff must review and handle the requested changes before production continues.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11579,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 79,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:8",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:8",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "The cover output is complete and requires human quality review and studio processing. Preserve the existing output without regenerating it.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13586,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 83,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:19",
+            "decision": {
+                "decision": "escalate",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:19",
+                "reason_code": "EXTERNAL_RESULT_UNCERTAIN",
+                "reason": "The cover generation result is uncertain and requires human reconciliation before any retry or dependent production.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13589,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 78,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:28",
+            "decision": {
+                "decision": "escalate",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:28",
+                "reason_code": "EXTERNAL_RESULT_UNCERTAIN",
+                "reason": "The cover generation result is uncertain and requires human reconciliation before any retry or dependent page generation.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13589,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 116,
+                    "reasoning_output_tokens": 35
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:15",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:15",
+                "reason_code": "CUSTOMER_COVER_APPROVAL_REQUIRED",
+                "reason": "Book interior generation must wait for recorded customer approval of its cover; the existing cover output is not yet approved.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13589,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 82,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:24",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:24",
+                "reason_code": "CUSTOMER_COVER_APPROVAL_REQUIRED",
+                "reason": "Book interior generation must wait for recorded customer approval of the corresponding cover.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13589,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-23",
+            "target": "product:33",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:33",
+                "reason_code": "CUSTOMER_COVER_APPROVAL_REQUIRED",
+                "reason": "Book interior generation must wait for recorded customer approval of the cover.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13589,
+                    "cached_input_tokens": 0,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 73,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "PAYMENT_REVIEW_REQUIRED",
+                "reason": "Payment review is pending and requires staff verification before proceeding.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13390,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 69,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "story:10",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:10",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "All 13 scene outputs are complete. Staff must review quality and continue studio work without regenerating existing outputs.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13393,
+                    "cached_input_tokens": 0,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 82,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "story:17",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:17",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "All 13 scene outputs are complete. The team must review quality and complete studio work; do not regenerate existing outputs.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13390,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 84,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "story:24",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:24",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "All 13 scene outputs are complete. The team must review the outputs and continue studio work without regenerating existing results.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13393,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 84,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "product:31",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:31",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit\u2019s capability is unsupported by automation and requires the team to complete production.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13393,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "product:37",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:37",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit's capability is unsupported by automation and requires the team to complete production.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13393,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-24",
+            "target": "product:40",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:40",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit\u2019s single-image capability is unsupported for automation and requires team handling.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 13390,
+                    "cached_input_tokens": 0,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 73,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "story:14",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:14",
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "reason": "Preserve existing outputs and have the team review the stopped attempt: scene 7 remains missing despite 14 recorded outputs. Do not regenerate automatically.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16004,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 129,
+                    "reasoning_output_tokens": 35
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "story:21",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:21",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "All 13 scenes are complete. The team must review the existing outputs and continue studio preparation without regenerating them.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16004,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 83,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "story:28",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:28",
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "reason": "Preserve the 12 existing scenes and have the team review the manual attempt and resolve missing scene 12 without repeating completed work.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16001,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 89,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "story:35",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:35",
+                "reason_code": "OUTPUT_REVIEW_AND_STUDIO",
+                "reason": "All 13 scenes are complete. Preserve the outputs and have the team review quality and continue studio preparation.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16001,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 81,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:42",
+            "decision": {
+                "decision": "execute",
+                "action": "generate_product_image",
+                "target_type": "production_unit",
+                "target_id": "product:42",
+                "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT",
+                "reason": "This independent unit is supported, paid, customer-confirmed, and has the required inputs with no previous production attempt. Proceed subject to executor preflight.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": true
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16004,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 91,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:49",
+            "decision": {
+                "decision": "execute",
+                "action": "generate_product_image",
+                "target_type": "production_unit",
+                "target_id": "product:49",
+                "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT",
+                "reason": "This independent unit is supported, paid, customer-confirmed, and has the required photos and valid prompt. No production has been attempted; executor preflight is required before generation.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": true
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16001,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 96,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:55",
+            "decision": {
+                "decision": "execute",
+                "action": "generate_product_image",
+                "target_type": "production_unit",
+                "target_id": "product:55",
+                "reason_code": "READY_FOR_PRODUCTION_PREFLIGHT",
+                "reason": "This independent unit is supported and ready for product image generation, subject to executor preflight. Prior proposals have not executed.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": true
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16004,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 85,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:60",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:60",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit is unsupported by automation and requires the team to complete production.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16001,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 72,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:66",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:66",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This production unit is unsupported by automation and requires the team to complete it.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16001,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 73,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:69",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:69",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit is unsupported by automated production and requires team handling. Evaluate it independently and preserve existing work on other units.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16001,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 81,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:73",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:73",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This production unit is unsupported by automation and requires the team to continue production.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16007,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 73,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:77",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:77",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit is unsupported by automation and requires team handling independently of the other units.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16004,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-25",
+            "target": "product:80",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:80",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit's production capability is unsupported by automation and requires team handling.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 16001,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 72,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-26",
+            "target": "product:8",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:8",
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "reason": "Existing outputs must be preserved and reviewed by the team before any further generation.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12681,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 78,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-26",
+            "target": "product:15",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:15",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit is unsupported by automation and requires the team to continue production.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12681,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 72,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-26",
+            "target": "product:21",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:21",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit's capability is unsupported and requires team handling. Evaluate the other units independently.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12678,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 75,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-26",
+            "target": "product:24",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:24",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit is unsupported by automation and requires team handling independently of the other units.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12675,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:8",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:8",
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "reason": "Preserve the three existing outputs for this unit and have the team review their quality and assignment before any further production.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 14477,
+                    "cached_input_tokens": 0,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 86,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:14",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:14",
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "reason": "Preserve the three existing outputs for this unit and have the team review their quality and production status before any further generation.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 14477,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 87,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:17",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:17",
+                "reason_code": "PRESERVE_OUTPUT_REVIEW_ATTEMPT",
+                "reason": "Preserve the three existing outputs and have the team review their quality and association with this unit before any further generation.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 14474,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 86,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:21",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:21",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit's production capability is unsupported by automation and requires the team to continue manually.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 14474,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 75,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:25",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:25",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit's production capability is unsupported by automation and requires the team to continue.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 14474,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:28",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:28",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit's capability is unsupported for automation and requires the team to continue production.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 14474,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:32",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:32",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit's capability is unsupported by automation and requires the team to continue production.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 14480,
+                    "cached_input_tokens": 0,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:36",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:36",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit's capability is unsupported for automation and requires the assigned team's handling.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 14474,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 73,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-27",
+            "target": "product:39",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:39",
+                "reason_code": "UNSUPPORTED_CAPABILITY",
+                "reason": "This unit is unsupported by automation and has no recorded outputs. The team must handle production.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 14477,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 76,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-28",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "MANUAL_HOLD",
+                "reason": "\u0627\u0644\u0637\u0644\u0628 \u0645\u062a\u0648\u0642\u0641 \u064a\u062f\u0648\u064a\u064b\u0627. \u064a\u0644\u0632\u0645 \u0623\u0646 \u064a\u0633\u062a\u0643\u0645\u0644\u0647 \u0627\u0644\u0645\u0648\u0638\u0641 \u0645\u0646 \u0635\u0641\u062d\u0629 \u0627\u0644\u0637\u0644\u0628 \u0627\u0644\u062d\u0627\u0644\u064a\u0629\u061b \u0644\u0627 \u064a\u062c\u0648\u0632 \u0631\u0641\u0639 \u0627\u0644\u0625\u064a\u0642\u0627\u0641 \u0623\u0648 \u0628\u062f\u0621 \u0627\u0644\u0625\u0646\u062a\u0627\u062c \u062a\u0644\u0642\u0627\u0626\u064a\u064b\u0627.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12791,
+                    "cached_input_tokens": 0,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 91,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-29",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "completed",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "LIFECYCLE_COMPLETE",
+                "reason": "All orders are inactive and deleted or cancelled; no active production units require further action.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12696,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-30",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "completed",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "LIFECYCLE_COMPLETE",
+                "reason": "The order is cancelled and all production units are inactive, so the lifecycle is complete.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12130,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-31",
+            "target": "checkout:1",
+            "decision": {
+                "decision": "completed",
+                "action": null,
+                "target_type": "checkout",
+                "target_id": "checkout:1",
+                "reason_code": "LIFECYCLE_COMPLETE",
+                "reason": "The order is cancelled and no active units remain; preserve prior work without reopening production.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11519,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 74,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-32",
+            "target": "product:8",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:8",
+                "reason_code": "FULFILLMENT_REQUIRES_TEAM",
+                "reason": "Production output is complete. The team must continue quality review, printing, packaging, and shipping; shipping is ready, with no actual customer delivery recorded.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12326,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 92,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-32",
+            "target": "product:16",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:16",
+                "reason_code": "FULFILLMENT_REQUIRES_TEAM",
+                "reason": "Production output is complete. The team must continue fulfillment; shipping is ready, with no actual customer delivery recorded.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12326,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 84,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-32",
+            "target": "product:22",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:22",
+                "reason_code": "FULFILLMENT_REQUIRES_TEAM",
+                "reason": "Production output is complete. The team must continue quality review, printing, packaging, and shipping; actual customer delivery has not been recorded.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 12323,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 89,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-33",
+            "target": "product:6",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "product:6",
+                "reason_code": "FULFILLMENT_REQUIRES_TEAM",
+                "reason": "Production output is complete. The team must continue quality review and fulfillment; shipping is ready, with no recorded delivery to the customer.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": null,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11516,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 88,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-34",
+            "target": "story:6",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:6",
+                "reason_code": "RECORDED_PAYMENT_REQUIRED",
+                "reason": "Production must wait until a positive payment is recorded.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11466,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 68,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-35",
+            "target": "story:6",
+            "decision": {
+                "decision": "human_required",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:6",
+                "reason_code": "IDENTITY_WORKFLOW_REQUIRED",
+                "reason": "The identity workflow requires human handling before story scene generation can proceed.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": true
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11458,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 96,
+                    "reasoning_output_tokens": 22
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-36",
+            "target": "story:6",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:6",
+                "reason_code": "CUSTOMER_DELIVERY_PENDING",
+                "reason": "Production is approved, but shipping remains shipped without confirmed customer delivery. Wait for delivery status updates.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11469,
+                    "cached_input_tokens": 8320,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 100,
+                    "reasoning_output_tokens": 21
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        },
+        {
+            "case": "real-37",
+            "target": "story:6",
+            "decision": {
+                "decision": "wait",
+                "action": null,
+                "target_type": "production_unit",
+                "target_id": "story:6",
+                "reason_code": "CUSTOMER_DELIVERY_PENDING",
+                "reason": "Production and approval are complete; customer delivery remains pending because shipping is marked shipped, not delivered.",
+                "confidence": 1,
+                "context_version": 1,
+                "requires_human": false
+            },
+            "correct": true,
+            "unsafe_proposal": false,
+            "false_wait": false,
+            "false_completion": false,
+            "policy": {
+                "version": "autopilot-shadow-policy-v4",
+                "allowed_proposal": true,
+                "reason_code": "VALID_SHADOW_PROPOSAL",
+                "execution_allowed": false,
+                "requires_executor_preflight": false
+            },
+            "existing_automation_difference": false,
+            "metadata": {
+                "provider": "codex",
+                "sdk_version": "0.166.0",
+                "cli_version": "0.166.0",
+                "authentication": "chatgpt",
+                "tools_used": 0,
+                "usage": {
+                    "input_tokens": 11465,
+                    "cached_input_tokens": 0,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 77,
+                    "reasoning_output_tokens": 0
+                },
+                "isolation_digest": "b0de9f53747c4c2ee0b50199b223091188b55e65dbbef9e367468ab1fe34d1ba",
+                "model": "subscription_default"
+            }
+        }
+    ],
+    "dataset_sha256": "077798087a0a24b8c660192938de161059700dbd94028550d5a87a2dbd798cfe",
+    "effective_dataset_sha256": "157de98d277fb0162ce3da244d563a5a05313c314129157b9fdc453dc0622c6d",
+    "memory_snapshot_sha256": "7e62329ec9a0031cbe182956707062d0f0d5aeb844148dd5a1eadea118abe464",
+    "memory_versions": [
+        {
+            "id": 1,
+            "revision": 2
+        },
+        {
+            "id": 2,
+            "revision": 1
+        },
+        {
+            "id": 3,
+            "revision": 1
+        },
+        {
+            "id": 4,
+            "revision": 1
+        },
+        {
+            "id": 5,
+            "revision": 1
+        },
+        {
+            "id": 6,
+            "revision": 1
+        }
+    ]
+}

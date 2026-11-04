@@ -1,0 +1,583 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-11-04T09:07:59+00:00",
+  "approval": "pending_owner_review",
+  "cases": [
+    {
+      "id": "live-delivery-01",
+      "origin": "actual_anonymized_rejected_shadow_snapshot",
+      "context": {
+        "schema_version": 1,
+        "capability_registry_version": "autopilot-shadow-policy-v4",
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:2",
+            "status": "delivered",
+            "payment_status": "paid_in_full",
+            "order_behavior": "delivered",
+            "shipping_behavior": "not_required",
+            "printing_status": "completed",
+            "shipping_status": "not_required",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "automation_control": {
+          "state": "running",
+          "version": 0
+        },
+        "assignee_ref": "staff:3",
+        "payment": {
+          "positive_recorded": true,
+          "consistent": true,
+          "ledger_ref": 1,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": null,
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false,
+          "staff_approval_ref": null
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:2",
+            "child_ref": "child-for-order:4",
+            "active": true,
+            "order_status": "delivered",
+            "has_photos": true,
+            "input_fingerprint": "ce25c6fb64b5f7c998e202d9b6d65c6aee32c015606c385b177328f41c0cf8c8",
+            "unit_key": "product:6",
+            "capability": "single_image",
+            "supported": false,
+            "product_ref": "product:7",
+            "variant_ref": null,
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "d5a1dc6de5b5da3b0522b5d926ee6f5e9339c4b256da42ee4f2b85cf9f185e5b",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:9",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 2,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "book_admission_eligible": false,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "memory": {
+          "digest": "1e349adf076ff970b2424b38f55bee970574a261f94d2df09f29d1b298026b4b",
+          "overflow": false,
+          "entries": [
+            {
+              "id": 1,
+              "revision": 2,
+              "title": "التسليم الفعلي للعميل ينهي دورة الطلب",
+              "guidance": "حالة الأوردر «تم الإنتاج والموافقة» لا تعني تسليم العميل، وتظل تحت المتابعة. تنتهي الدورة عند الإلغاء أو عندما تسجل حالة الشحن التسليم الفعلي للعميل، حتى لو بقي إيقاف يدوي قديم. قبل التسليم احترم الإيقاف والعمل الجاري؛ تابع الطباعة والتجهيز والشحن مع الفريق دون إعادة إنتاج نتائج معتمدة. صفحات الكتاب الناقصة تخضع لشروط بدء أو استئناف المسار الحالي. داخل الطلب المجمع قيّم الوحدات المفتوحة المستقلة ولا تغلقها بسبب انتهاء وحدة أخرى.\nتفسير مفاتيح البيانات: orders[].status=delivered أو order_behavior=delivered يعني «تم الإنتاج والموافقة» فقط، وليس تسليم العميل. shipping_status=not_required أو shipping_behavior=not_required ليس دليل تسليم. التسليم الفعلي هو shipping_behavior=delivered. إذا كانت الوحدة active=true والهدف المسجل human_required/FULFILLMENT_REQUIRES_TEAM، فاعرض المتابعة مع الفريق ولا تقترح completed أو ORDER_DELIVERED بسبب حالة الأوردر. احترم أهداف Capability Registry والسياسة المسجلة.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 2,
+              "revision": 1,
+              "title": "الأوردر الملغي يظل منتهيًا",
+              "guidance": "إذا ألغى الفريق الأوردر، اتركه منتهيًا. الإيقاف اليدوي القديم والنتائج المحفوظة لا يستدعيان إعادة فتحه أو اقتراح إنتاج جديد. احتفظ بسجل العمل السابق.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 3,
+              "revision": 1,
+              "title": "قبول التأكيد الذي يسجله الفريق",
+              "guidance": "قد يؤكد العميل عبر واتساب أو قناة أخرى. يستطيع الموظف تسجيل التأكيد من مسار الطلب الحالي بصلاحياته. بعد تسجيله اقرأ حالة الطلب الجديدة وتوقف عن طلب تأكيد مكرر. لا تعتبر نص ملاحظة أو رسالة غير مسجلة بديلًا عن الحالة الفعلية.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 4,
+              "revision": 1,
+              "title": "احترام النتائج التي يرفعها الفريق",
+              "guidance": "قد ينفذ الفريق المحاولة المتوقفة يدويًا ويرفع الناتج إلى الوحدة الصحيحة. اقرأ المرفقات والنتائج المسجلة في المراجعة التالية، واحفظ الموجود واطلب مراجعة الجودة عند الحاجة. لا تكرر التوليد ولا تنسب ملف وحدة إلى وحدة أخرى.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 5,
+              "revision": 1,
+              "title": "الموظف هو الذي يستكمل الإيقاف اليدوي",
+              "guidance": "اعرض أن الطلب متوقف يدويًا، وأرشد الموظف إلى استكماله من صفحة الطلب الحالية إذا أراد. لا ترفع الإيقاف من نفسك. بعد تسجيل الاستكمال اقرأ الحالة الجديدة واحفظ الخطوات المكتملة. حالة «تم الإنتاج والموافقة» لا تلغي الإيقاف ولا تنهي المتابعة. التسليم الفعلي للعميل المسجل في حالة الشحن، أو إلغاء الأوردر، ينهي الدورة حتى لو بقي إيقاف قديم.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 6,
+              "revision": 1,
+              "title": "كل وحدة إنتاج لها تقييم مستقل",
+              "guidance": "راجع كل وحدة داخل الطلب المجمع حسب حالتها. تعطل وحدة لا يخفي الوحدات المستقلة الأخرى. تابع التغطية على دورات محدودة واحترم الإيقاف على مستوى الطلب، ولا تفترض أن اقتراحًا سابقًا تم تنفيذه.",
+              "scope": "global",
+              "source": "owner_review"
+            }
+          ]
+        },
+        "fingerprint": "f4fc6e6ffc34f7423b6b8407643aff3f71f70e3d36e6e1379bd83a95b2666351"
+      },
+      "prior_proposal": {
+        "action": null,
+        "decision": "completed",
+        "reason_code": "ORDER_DELIVERED",
+        "target_type": "production_unit"
+      },
+      "prior_policy_reason": "INCOMPLETE_TARGET",
+      "approval": "pending_owner_review",
+      "existing_automation": [],
+      "expected": [
+        {
+          "target_id": "product:6",
+          "target_type": "production_unit",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "FULFILLMENT_REQUIRES_TEAM"
+        }
+      ],
+      "label_basis": "Owner-approved production-approved-is-not-delivered rule; active unit and no actual delivery evidence; manually labelled, not generated from CapabilityRegistry."
+    },
+    {
+      "id": "live-delivery-02",
+      "origin": "actual_anonymized_rejected_shadow_snapshot",
+      "context": {
+        "schema_version": 1,
+        "capability_registry_version": "autopilot-shadow-policy-v4",
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:2",
+            "status": "delivered",
+            "payment_status": "paid_in_full",
+            "order_behavior": "delivered",
+            "shipping_behavior": "not_required",
+            "printing_status": "completed",
+            "shipping_status": "not_required",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "automation_control": {
+          "state": "running",
+          "version": 0
+        },
+        "assignee_ref": "staff:3",
+        "payment": {
+          "positive_recorded": true,
+          "consistent": true,
+          "ledger_ref": 1,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": null,
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false,
+          "staff_approval_ref": null
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:2",
+            "child_ref": "child-for-order:4",
+            "active": true,
+            "order_status": "delivered",
+            "has_photos": true,
+            "input_fingerprint": "e880aeb44f8378339cf017f4b2d60fdd4b2ff33d1e374cdb12c2051faf195d08",
+            "unit_key": "product:6",
+            "capability": "single_image",
+            "supported": false,
+            "product_ref": "product:7",
+            "variant_ref": null,
+            "stage": "standard",
+            "source": "live_component_template",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "5c1c9f1140210fb7702c2ba29216da091ae9132ca5b968989e79ddf132ed4ae1",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:9",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 2,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "book_admission_eligible": false,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "memory": {
+          "digest": "1e349adf076ff970b2424b38f55bee970574a261f94d2df09f29d1b298026b4b",
+          "overflow": false,
+          "entries": [
+            {
+              "id": 1,
+              "revision": 2,
+              "title": "التسليم الفعلي للعميل ينهي دورة الطلب",
+              "guidance": "حالة الأوردر «تم الإنتاج والموافقة» لا تعني تسليم العميل، وتظل تحت المتابعة. تنتهي الدورة عند الإلغاء أو عندما تسجل حالة الشحن التسليم الفعلي للعميل، حتى لو بقي إيقاف يدوي قديم. قبل التسليم احترم الإيقاف والعمل الجاري؛ تابع الطباعة والتجهيز والشحن مع الفريق دون إعادة إنتاج نتائج معتمدة. صفحات الكتاب الناقصة تخضع لشروط بدء أو استئناف المسار الحالي. داخل الطلب المجمع قيّم الوحدات المفتوحة المستقلة ولا تغلقها بسبب انتهاء وحدة أخرى.\nتفسير مفاتيح البيانات: orders[].status=delivered أو order_behavior=delivered يعني «تم الإنتاج والموافقة» فقط، وليس تسليم العميل. shipping_status=not_required أو shipping_behavior=not_required ليس دليل تسليم. التسليم الفعلي هو shipping_behavior=delivered. إذا كانت الوحدة active=true والهدف المسجل human_required/FULFILLMENT_REQUIRES_TEAM، فاعرض المتابعة مع الفريق ولا تقترح completed أو ORDER_DELIVERED بسبب حالة الأوردر. احترم أهداف Capability Registry والسياسة المسجلة.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 2,
+              "revision": 1,
+              "title": "الأوردر الملغي يظل منتهيًا",
+              "guidance": "إذا ألغى الفريق الأوردر، اتركه منتهيًا. الإيقاف اليدوي القديم والنتائج المحفوظة لا يستدعيان إعادة فتحه أو اقتراح إنتاج جديد. احتفظ بسجل العمل السابق.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 3,
+              "revision": 1,
+              "title": "قبول التأكيد الذي يسجله الفريق",
+              "guidance": "قد يؤكد العميل عبر واتساب أو قناة أخرى. يستطيع الموظف تسجيل التأكيد من مسار الطلب الحالي بصلاحياته. بعد تسجيله اقرأ حالة الطلب الجديدة وتوقف عن طلب تأكيد مكرر. لا تعتبر نص ملاحظة أو رسالة غير مسجلة بديلًا عن الحالة الفعلية.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 4,
+              "revision": 1,
+              "title": "احترام النتائج التي يرفعها الفريق",
+              "guidance": "قد ينفذ الفريق المحاولة المتوقفة يدويًا ويرفع الناتج إلى الوحدة الصحيحة. اقرأ المرفقات والنتائج المسجلة في المراجعة التالية، واحفظ الموجود واطلب مراجعة الجودة عند الحاجة. لا تكرر التوليد ولا تنسب ملف وحدة إلى وحدة أخرى.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 5,
+              "revision": 1,
+              "title": "الموظف هو الذي يستكمل الإيقاف اليدوي",
+              "guidance": "اعرض أن الطلب متوقف يدويًا، وأرشد الموظف إلى استكماله من صفحة الطلب الحالية إذا أراد. لا ترفع الإيقاف من نفسك. بعد تسجيل الاستكمال اقرأ الحالة الجديدة واحفظ الخطوات المكتملة. حالة «تم الإنتاج والموافقة» لا تلغي الإيقاف ولا تنهي المتابعة. التسليم الفعلي للعميل المسجل في حالة الشحن، أو إلغاء الأوردر، ينهي الدورة حتى لو بقي إيقاف قديم.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 6,
+              "revision": 1,
+              "title": "كل وحدة إنتاج لها تقييم مستقل",
+              "guidance": "راجع كل وحدة داخل الطلب المجمع حسب حالتها. تعطل وحدة لا يخفي الوحدات المستقلة الأخرى. تابع التغطية على دورات محدودة واحترم الإيقاف على مستوى الطلب، ولا تفترض أن اقتراحًا سابقًا تم تنفيذه.",
+              "scope": "global",
+              "source": "owner_review"
+            }
+          ]
+        },
+        "fingerprint": "3915364c495e786e71d89fee5d9f119e6100d02224918812c8be37876cb688cb"
+      },
+      "prior_proposal": {
+        "action": null,
+        "decision": "completed",
+        "reason_code": "ORDER_DELIVERED",
+        "target_type": "production_unit"
+      },
+      "prior_policy_reason": "INCOMPLETE_TARGET",
+      "approval": "pending_owner_review",
+      "existing_automation": [],
+      "expected": [
+        {
+          "target_id": "product:6",
+          "target_type": "production_unit",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "FULFILLMENT_REQUIRES_TEAM"
+        }
+      ],
+      "label_basis": "Owner-approved production-approved-is-not-delivered rule; active unit and no actual delivery evidence; manually labelled, not generated from CapabilityRegistry."
+    },
+    {
+      "id": "live-delivery-03",
+      "origin": "actual_anonymized_rejected_shadow_snapshot",
+      "context": {
+        "schema_version": 1,
+        "capability_registry_version": "autopilot-shadow-policy-v4",
+        "checkout_ref": "checkout:1",
+        "orders": [
+          {
+            "order_ref": "order:2",
+            "status": "delivered",
+            "payment_status": "paid_in_full",
+            "order_behavior": "delivered",
+            "shipping_behavior": "not_required",
+            "printing_status": "completed",
+            "shipping_status": "not_required",
+            "deleted": false,
+            "active": true
+          }
+        ],
+        "all_complete": false,
+        "hold": false,
+        "automation_owned": false,
+        "automation_control": {
+          "state": "running",
+          "version": 0
+        },
+        "assignee_ref": "staff:3",
+        "payment": {
+          "positive_recorded": true,
+          "consistent": true,
+          "ledger_ref": 1,
+          "review_pending": false
+        },
+        "confirmation": {
+          "required": false,
+          "status": null,
+          "sendable": false
+        },
+        "customer_interactions": [],
+        "change_requested": false,
+        "process_runs": [],
+        "review": {
+          "manifest_ref": null,
+          "approved": false,
+          "staff_approval_ref": null
+        },
+        "global_uncertain": false,
+        "runtime": {
+          "scenes_enabled": true,
+          "scenes_automatic": true,
+          "identity_enabled": true,
+          "products_enabled": true,
+          "reviews_enabled": true,
+          "book_pages_enabled": true
+        },
+        "units": [
+          {
+            "order_ref": "order:2",
+            "child_ref": "child-for-order:4",
+            "active": true,
+            "order_status": "delivered",
+            "has_photos": true,
+            "input_fingerprint": "673626fb9cb6329b21a3a74cdce8eb796b4fa7613a2afbedd4dfe8ea593d08a0",
+            "unit_key": "product:6",
+            "capability": "single_image",
+            "supported": false,
+            "product_ref": "product:7",
+            "variant_ref": "variant:8",
+            "stage": "standard",
+            "source": "order_component_snapshot",
+            "spec_revision": "compat-v1",
+            "spec_fingerprint": "ccebb440274764ed5b749cdf096319fe1b51d7ae0a81b8316a40ee1d81f48b0a",
+            "expected_outputs": 1,
+            "purchased_copies": 1,
+            "prompt_complete": true,
+            "variant_valid": true,
+            "required_inputs": [
+              "child_photos"
+            ],
+            "human_steps": [
+              "quality_review",
+              "studio",
+              "printing",
+              "packaging",
+              "shipping"
+            ],
+            "quality_requirements": [
+              "correct_child",
+              "correct_unit",
+              "print_review"
+            ],
+            "item_ref": "item:10",
+            "identity_approved": false,
+            "identity_status": null,
+            "production": {
+              "run_ref": null,
+              "status": null,
+              "active": false,
+              "uncertain": false,
+              "attempted": false,
+              "completed_numbers": [],
+              "missing_numbers": [
+                1
+              ]
+            },
+            "output_count": 1,
+            "cover_approved": false,
+            "linked_story_ref": null,
+            "book_admission_eligible": false,
+            "linked_story_valid": true,
+            "linked_story_complete": true,
+            "legacy_conflict": false
+          }
+        ],
+        "context_version": 1,
+        "memory": {
+          "digest": "1e349adf076ff970b2424b38f55bee970574a261f94d2df09f29d1b298026b4b",
+          "overflow": false,
+          "entries": [
+            {
+              "id": 1,
+              "revision": 2,
+              "title": "التسليم الفعلي للعميل ينهي دورة الطلب",
+              "guidance": "حالة الأوردر «تم الإنتاج والموافقة» لا تعني تسليم العميل، وتظل تحت المتابعة. تنتهي الدورة عند الإلغاء أو عندما تسجل حالة الشحن التسليم الفعلي للعميل، حتى لو بقي إيقاف يدوي قديم. قبل التسليم احترم الإيقاف والعمل الجاري؛ تابع الطباعة والتجهيز والشحن مع الفريق دون إعادة إنتاج نتائج معتمدة. صفحات الكتاب الناقصة تخضع لشروط بدء أو استئناف المسار الحالي. داخل الطلب المجمع قيّم الوحدات المفتوحة المستقلة ولا تغلقها بسبب انتهاء وحدة أخرى.\nتفسير مفاتيح البيانات: orders[].status=delivered أو order_behavior=delivered يعني «تم الإنتاج والموافقة» فقط، وليس تسليم العميل. shipping_status=not_required أو shipping_behavior=not_required ليس دليل تسليم. التسليم الفعلي هو shipping_behavior=delivered. إذا كانت الوحدة active=true والهدف المسجل human_required/FULFILLMENT_REQUIRES_TEAM، فاعرض المتابعة مع الفريق ولا تقترح completed أو ORDER_DELIVERED بسبب حالة الأوردر. احترم أهداف Capability Registry والسياسة المسجلة.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 2,
+              "revision": 1,
+              "title": "الأوردر الملغي يظل منتهيًا",
+              "guidance": "إذا ألغى الفريق الأوردر، اتركه منتهيًا. الإيقاف اليدوي القديم والنتائج المحفوظة لا يستدعيان إعادة فتحه أو اقتراح إنتاج جديد. احتفظ بسجل العمل السابق.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 3,
+              "revision": 1,
+              "title": "قبول التأكيد الذي يسجله الفريق",
+              "guidance": "قد يؤكد العميل عبر واتساب أو قناة أخرى. يستطيع الموظف تسجيل التأكيد من مسار الطلب الحالي بصلاحياته. بعد تسجيله اقرأ حالة الطلب الجديدة وتوقف عن طلب تأكيد مكرر. لا تعتبر نص ملاحظة أو رسالة غير مسجلة بديلًا عن الحالة الفعلية.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 4,
+              "revision": 1,
+              "title": "احترام النتائج التي يرفعها الفريق",
+              "guidance": "قد ينفذ الفريق المحاولة المتوقفة يدويًا ويرفع الناتج إلى الوحدة الصحيحة. اقرأ المرفقات والنتائج المسجلة في المراجعة التالية، واحفظ الموجود واطلب مراجعة الجودة عند الحاجة. لا تكرر التوليد ولا تنسب ملف وحدة إلى وحدة أخرى.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 5,
+              "revision": 1,
+              "title": "الموظف هو الذي يستكمل الإيقاف اليدوي",
+              "guidance": "اعرض أن الطلب متوقف يدويًا، وأرشد الموظف إلى استكماله من صفحة الطلب الحالية إذا أراد. لا ترفع الإيقاف من نفسك. بعد تسجيل الاستكمال اقرأ الحالة الجديدة واحفظ الخطوات المكتملة. حالة «تم الإنتاج والموافقة» لا تلغي الإيقاف ولا تنهي المتابعة. التسليم الفعلي للعميل المسجل في حالة الشحن، أو إلغاء الأوردر، ينهي الدورة حتى لو بقي إيقاف قديم.",
+              "scope": "global",
+              "source": "owner_review"
+            },
+            {
+              "id": 6,
+              "revision": 1,
+              "title": "كل وحدة إنتاج لها تقييم مستقل",
+              "guidance": "راجع كل وحدة داخل الطلب المجمع حسب حالتها. تعطل وحدة لا يخفي الوحدات المستقلة الأخرى. تابع التغطية على دورات محدودة واحترم الإيقاف على مستوى الطلب، ولا تفترض أن اقتراحًا سابقًا تم تنفيذه.",
+              "scope": "global",
+              "source": "owner_review"
+            }
+          ]
+        },
+        "fingerprint": "336be5afb37178b64add32d28e082fdb6be3866b658955cf7a67cc3bd53d4ccb"
+      },
+      "prior_proposal": {
+        "action": null,
+        "decision": "completed",
+        "reason_code": "ORDER_DELIVERED",
+        "target_type": "production_unit"
+      },
+      "prior_policy_reason": "INCOMPLETE_TARGET",
+      "approval": "pending_owner_review",
+      "existing_automation": [],
+      "expected": [
+        {
+          "target_id": "product:6",
+          "target_type": "production_unit",
+          "decision": "human_required",
+          "action": null,
+          "reason_code": "FULFILLMENT_REQUIRES_TEAM"
+        }
+      ],
+      "label_basis": "Owner-approved production-approved-is-not-delivered rule; active unit and no actual delivery evidence; manually labelled, not generated from CapabilityRegistry."
+    }
+  ]
+}

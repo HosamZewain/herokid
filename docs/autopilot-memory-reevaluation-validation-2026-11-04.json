@@ -1,0 +1,193 @@
+{
+  "task": "HeroKid Auto Pilot current-memory reevaluation",
+  "date_cairo": "2026-11-04",
+  "source_sha": "6421694bdeb9df3734188a7eec5e4de9fbd4bdbc",
+  "branch": "codex/autopilot-memory-reevaluation-20261104",
+  "tests": {
+    "before_sqlite": {
+      "tests": 313,
+      "assertions": 4199,
+      "passed": true
+    },
+    "after_sqlite": {
+      "tests": 317,
+      "assertions": 4375,
+      "passed": true
+    },
+    "after_mysql": {
+      "tests": 317,
+      "assertions": 4376,
+      "passed": true
+    },
+    "final_focused": {
+      "tests": 12,
+      "assertions": 325,
+      "passed": true
+    }
+  },
+  "ui": {
+    "authenticated": true,
+    "read_only": true,
+    "dashboard_visual_verified": true,
+    "memory_visual_verified": true,
+    "revision_history_verified": [
+      1,
+      2
+    ],
+    "observation_continues_at_quota": true,
+    "forms_submitted": false,
+    "daily_limit_visually_verified": 1000,
+    "usage_visually_verified": 395,
+    "checked_at_cairo": "2026-11-04 11:49"
+  },
+  "authorization": {
+    "permanent_daily_limit": 1000,
+    "owner_statement": "خلي الحد 1000 عادي",
+    "previous_limit": 300,
+    "attempts_before": 300,
+    "autonomous_execution": false
+  },
+  "report_state": "real evaluation complete; permanent 1000/day applied and verified on AWS",
+  "production_business_mutations": 0,
+  "new_review_cases": {
+    "count": 3,
+    "approval": "pending_owner_review",
+    "included_in_approved_accuracy": false
+  },
+  "real_evaluation": {
+    "provider": "codex",
+    "real_model": true,
+    "dataset_approval": "owner_approved",
+    "cases": 37,
+    "expected_targets": 89,
+    "correct": 89,
+    "accuracy_percent": 100,
+    "unsafe_proposals": 0,
+    "false_waits": 0,
+    "false_completions": 0,
+    "unsupported_targets": 19,
+    "unevaluated_targets": 0,
+    "existing_automation_comparable": 24,
+    "existing_automation_differences": 0,
+    "stopped_reason": null,
+    "live_execution_gate": false,
+    "accuracy_gate_met": true,
+    "dataset_sha256": "077798087a0a24b8c660192938de161059700dbd94028550d5a87a2dbd798cfe",
+    "effective_dataset_sha256": "157de98d277fb0162ce3da244d563a5a05313c314129157b9fdc453dc0622c6d",
+    "memory_snapshot_sha256": "7e62329ec9a0031cbe182956707062d0f0d5aeb844148dd5a1eadea118abe464",
+    "memory_versions": [
+      {
+        "id": 1,
+        "revision": 2
+      },
+      {
+        "id": 2,
+        "revision": 1
+      },
+      {
+        "id": 3,
+        "revision": 1
+      },
+      {
+        "id": 4,
+        "revision": 1
+      },
+      {
+        "id": 5,
+        "revision": 1
+      },
+      {
+        "id": 6,
+        "revision": 1
+      }
+    ]
+  },
+  "aws_verified_snapshot": {
+    "verified_at_utc": "2026-11-04T09:48:50+00:00",
+    "observe": true,
+    "evaluate": true,
+    "mcp_enabled": false,
+    "provider": "codex",
+    "daily_limit": 1000,
+    "cycles_per_pass": 3,
+    "quota_day": "2026-11-04",
+    "attempts": 395,
+    "lease_held": false,
+    "activity_stage": "waiting_queue",
+    "activity_updated_at": "2026-11-04 09:48:31",
+    "last_observed_at": "2026-11-04 09:48:30",
+    "provider_checked_at": "2026-11-04 09:48:08",
+    "provider_error": null,
+    "observed_groups": 264,
+    "state_counts": {
+      "covered": 87,
+      "inactive": 4,
+      "partial": 14,
+      "pending": 94,
+      "quota_deferred": 65
+    },
+    "today_aws_runs": 217,
+    "run_statuses": {
+      "simulated": 214,
+      "policy_blocked": 3
+    },
+    "saved_decisions": 217,
+    "decision_types": {
+      "human_required": 180,
+      "completed": 4,
+      "wait": 30,
+      "execute": 3
+    },
+    "decision_reason_codes": {
+      "FULFILLMENT_REQUIRES_TEAM": 11,
+      "ORDER_DELIVERED": 3,
+      "CUSTOMER_DELIVERY_PENDING": 15,
+      "IDENTITY_WORKFLOW_REQUIRED": 10,
+      "RECORDED_PAYMENT_REQUIRED": 10,
+      "EXECUTOR_OR_STAGE_UNAVAILABLE": 2,
+      "UNIT_INACTIVE": 1,
+      "PRESERVE_OUTPUT_REVIEW_ATTEMPT": 133,
+      "CONFIRMATION_REQUIRED": 5,
+      "UNSUPPORTED_CAPABILITY": 7,
+      "PRODUCTION_BRIEF_INCOMPLETE": 1,
+      "MANUAL_HOLD": 1,
+      "READY_FOR_PRODUCTION_PREFLIGHT": 3,
+      "OUTPUT_REVIEW_AND_STUDIO": 11,
+      "PAYMENT_REVIEW_REQUIRED": 1,
+      "CUSTOMER_COVER_APPROVAL_REQUIRED": 3
+    },
+    "execution_disabled_for_every_saved_decision": true,
+    "completed_runs_subscription_zero_tools_isolation": true,
+    "completed_runs_with_metadata": 217,
+    "active_memory_rules": 6,
+    "memory_versions": 7,
+    "failed_jobs": 83
+  },
+  "aws_config_verification": {
+    "verified_at_utc": "2026-11-04T09:48:51+00:00",
+    "daily_limit": 1000,
+    "only_daily_limit_changed": true,
+    "env_preserved": true,
+    "laravel_log_changes": {
+      "laravel.log": {
+        "new_bytes": 0
+      }
+    },
+    "nginx_new_error_bytes": 0,
+    "mcp_enabled": false,
+    "observe": true,
+    "evaluate": true
+  },
+  "quota_reconciliation": {
+    "applied": true,
+    "quota_day": "2026-11-04",
+    "host_attempts_before": 300,
+    "host_attempts_after": 389,
+    "local_attempts_included": 89,
+    "report_sha256": "d3bfabeeaadc3c74b2109ac7b2e245f81fcd2b5836922823fb1c3342bc97be8e",
+    "business_mutations": 0,
+    "prior_audits_preserved": true
+  },
+  "source_deployment": "No application-source deployment; offline harness remains on dedicated feature branch. Production config change only.",
+  "recovery_checkpoint": "/home/ubuntu/herokid-before-autopilot-1000-20261104"
+}

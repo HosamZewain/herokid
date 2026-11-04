@@ -1,6 +1,50 @@
 # HeroKid Auto Pilot — Phase 1
 
-## AWS deployment status — 4 November 2026
+## Current-memory reevaluation COMPLETE; 1000/day LIVE — 4 November 2026
+
+The owner explicitly raised the permanent allowance to **1000 decisions/Cairo day**.
+Verified on AWS and the authenticated dashboard at11:49 Cairo. Shared usage was
+300 before the new local benchmark; all89 attempts were reconciled to389 before
+resuming the dedicated Shadow worker. A later live snapshot was395/1000. No reset,
+separate allowance, API fallback, autonomous execution or new AWS resource.
+
+Dedicated branch `codex/autopilot-memory-reevaluation-20261104` starts from verified
+AWS/GitHub source `6421694bdeb9df3734188a7eec5e4de9fbd4bdbc`. Offline evaluation
+changes remain on this feature branch; production application source is unchanged.
+Only cached `agentic.daily_limit` changed; environment, all other configuration,
+permissions and existing production ownership were preserved.
+
+- **Actual isolated Codex result:89/89 correct,100%** on the37 approved checkouts;
+  unsafe proposals0, false waits0, false completions0, unevaluated targets0.
+  Unsupported targets19;24 existing-automation comparisons,0 differences.
+  All89 responses used ChatGPT authentication, zero tools and verified isolation;
+  every policy kept execution disabled. Independent label/metadata verification passed.
+- Approved v3 corpus unchanged. Actual global memory versions `1:2,2:1,3:1,4:1,5:1,6:1`
+  overlay only guidance/fingerprints; reports preserve original/effective corpus and
+  memory hashes. No expected labels or captured business facts were rewritten.
+- Premature completion now counts as an unsafe proposal before policy and is also
+  reported as `false_completions`. Rejected proposals remain failures in metrics.
+- Three actual anonymized rejected completion cases are preserved separately with
+  their old proposals and policy reasons. Their proposed labels follow the owner's
+  confirmed rule; approval remains `pending_owner_review`, outside the89 denominator.
+  [Arabic review](docs/autopilot-live-delivery-review-2026-11-04.ar.html).
+- Before changes:313 tests/4199 assertions on isolated SQLite. After:317/4375 on
+  SQLite,317/4376 on isolated MySQL8.4; final malformed-input coverage12/325.
+  PHP8.3/Pint/diff checks pass. No production tests or migrations.
+- Authenticated activity/quota/memory/history were visually verified. Observation
+  continued at the old cap and Shadow decisions resumed under1000. Six active rules,
+  seven immutable versions retained; all three earlier blocked proposals retained.
+  Current-memory live cohort207/207 agrees with registry with0 new policy blocks at
+  11:48:53 Cairo; this separate live observation is not approved-set accuracy.
+- Recovery `/home/ubuntu/herokid-before-autopilot-1000-20261104`: prior private config,
+  hashes/modes, quota receipt, anonymized report and service/log baselines. Preserve
+  consumed attempts and later writes during any recovery. No shared cache/queue reset.
+
+[Measured report](docs/autopilot-memory-reevaluation-2026-11-04.ar.md),
+[actual model results](docs/autopilot-memory-reevaluation-2026-11-04.json), and
+[validation evidence](docs/autopilot-memory-reevaluation-validation-2026-11-04.json).
+
+## Initial AWS deployment history — 4 November 2026
 
 The owner explicitly authorized deployment. Application `be5fe8b461e1bbd01bc3ebb93d9534f2117c638a`
 is deployed from GitHub main on the existing AWS host. The three exact additive
@@ -314,7 +358,7 @@ transport complexity that is not necessary for these seven reads.
   the exact image pair and three additive migrations are installed, and bounded
   observation and Shadow evaluation are enabled. Dedicated host authentication,
   actual container/network attestation and zero-tool checks passed on November 4.
-  The owner raised the current host allowance to 300/day without resetting usage.
+  The owner initially raised the host allowance to300/day, then to1000/day as recorded above, without resetting usage.
 
 - November 3 real acceptance: dedicated ChatGPT authentication verified through
   actual inference; **87/87 correct (100%)** on 37 owner-approved checkouts,

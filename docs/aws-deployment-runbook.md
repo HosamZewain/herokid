@@ -1,5 +1,39 @@
 # HeroKid AWS deployment and agent handoff
 
+## 4 November 2026 — Auto Pilot1000/day APPLIED; current-memory evaluation PASSED
+
+Owner explicitly instructed “خلي الحد1000 عادي”. Permanent **1000 decisions/Cairo day**
+is applied and authenticated UI/host verified at09:48–09:49UTC /11:48–11:49 Cairo.
+Application source remains **6421694bdeb9df3734188a7eec5e4de9fbd4bdbc**. This follow-up
+changed only cached `agentic.daily_limit`; `.env`, all other cached settings and file
+permissions are preserved. No source/schema deployment or new AWS resource. Preserve
+**1000**, including provider registration, on later configuration/deployment operations.
+
+The isolated real Codex benchmark with actual memory revisions1:2/2–6:1 passed
+**89/89 correct,100%** on37 approved checkouts: unsafe0/false-wait0/false-completion0/
+unevaluated0, unsupported19,24 existing-automation comparisons and0 differences.
+All responses: ChatGPT subscription, zero tools, verified isolation and execution=false.
+Approved captured facts/labels stayed unchanged. Offline evaluator fixes and separate
+three-case review fixture remain on `codex/autopilot-memory-reevaluation-20261104`;
+[report](autopilot-memory-reevaluation-2026-11-04.ar.md) and
+[results](autopilot-memory-reevaluation-2026-11-04.json). New cases remain pending owner
+review and outside the89 denominator. Autonomous execution remains absent/unauthorized.
+
+Reconciled300→389 attempts before resuming Shadow:211 AWS +178 local (89 earlier,
+89 current). Only exhausted/idle Shadow worker1666145 was gracefully drained and
+replaced by1690641; FPM gracefully reloaded. Codex1318728 preserved. At09:48:50UTC,
+usage395/1000,217AWS runs (214simulated/3historical blocked); current-memory cohort207
+matches registry with no new completion errors, false waits or blocks. This live
+cohort is operational evidence, not independent accuracy. Six memory rules/seven
+versions retained; activity/memory/history and1000quota visually verified.
+
+317 automation regressions passed on isolated PHP8.3 SQLite/MySQL8.4; no production
+tests. Public home/up/cart200, failed_jobs83unchanged, zero new Laravel/Nginx error
+bytes. Recovery **/home/ubuntu/herokid-before-autopilot-1000-20261104** holds prior
+private config/hash/mode evidence, usage receipt, anonymized report, services/log
+baselines. Preserve consumed quota/audit and later customer writes during recovery;
+never reset usage, replay queues, restore DB or replace newer unrelated config.
+
 ## 4 November 2026 — explicit uncertain product recovery DEPLOYED
 
 Application **bef8d6939da3139a41dd6488c72387f9ae39c262** deployed from GitHub/AWS main **08:23:13UTC /10:23 Cairo**, base **a82e92758b8cfd15b41d5fb32f785298dc8ac8d5**. Owner explicitly instructed “حل المشكلة وانشر”. Primary dirty/mobile checkout preserved. [Behavior, diagnostics, tests and recovery contract](product-uncertain-recovery-2026-11-04.ar.md).
