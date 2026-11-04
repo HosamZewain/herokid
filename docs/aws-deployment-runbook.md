@@ -1,5 +1,19 @@
 # HeroKid AWS deployment and agent handoff
 
+## 4 November 2026 — legacy coloring-book admission and missing page counts DEPLOYED
+
+Owner explicitly approved “انشر” for **fe85b10adeedd453b7f990e28f40743be03ce4c6**. Application deployed from GitHub/AWS main at **12:55:21 UTC /14:55 Cairo**, base **1e72e581ba1408ef9bedb97889a896f92ba96d46**. [Behavior, team steps and tests](legacy-book-admission-2026-11-04.ar.md). Primary mobile/UI checkout preserved.
+
+Explicit per-child legacy cover adoption retains existing media and old component configuration, records encrypted staff approval, and enables a separate explicit Codex start. Missing historical page count is repaired from the exact purchased variant during staff admission only before any prior output/attempt; new snapshots include the count. Only additive migration **2026_11_04_150000_create_legacy_book_cover_approvals.php** applied before reader activation. All19 changed-file hashes/readability verified, PHP8.3 syntax and route/view caches passed; FPM gracefully reloaded. No dependency/config/asset change; private environment/config bytes and known mode/untracked-asset drift preserved.
+
+Four Laravel workers gracefully refreshed after accepted jobs (process-ai1783200/default1783203/process1783205/conversations1783231). Shadow received TERM, drained to inactive Result=success, then started1784544; live configuration unchanged. **Codex1318728 preserved**, legacy workers stayed stopped. No historical replay, staff approval, production synthetic order, paid generation call or customer message was initiated by the deployment agent.
+
+Actual staff actions occurred immediately after publication: user1 approved HK10-556/item2818/retained preview3574 at12:55:58UTC, then explicitly started run **c8925923-cd4f-4533-ad6c-6afc1cd73685** at12:56:10UTC. At12:57:08 it was running0/40 pages, using legacy approval1. User1 admitted HK11-25 at12:56:49UTC; both purchased snapshots now persist20pages, first cover processing and second queued. These are real user actions evidenced by normal audits, not release tests or automatic historical activation. Authenticated GETs confirmed both live progress banners; no mutation forms were submitted by the agent.
+
+PHP8.3.3 SQLite and isolated MySQL8 each **136 tests /1280 assertions** pass. Local synthetic visual QA and lockfile build passed; no asset diff. Postrelease home/up/cart HTTPS200, eight services active, scheduler success/exit0, failed_jobs83unchanged. Bounded216HTTP requests had zero5xx; zero new Laravel/Nginx/worker error bytes.
+
+Recovery checkpoint **/home/ubuntu/herokid-before-legacy-books-fe85b10** contains source archive/hash, private environment/config/routes, drift/workers/log baselines and exact changed-file list. Fresh **herokid-20261104T125336Z.sql.gz** passed gzip/localSHA and off-instance S3 SHA/size verification. A legacy-approval Codex run is now active: **do not roll back to readers that lack legacy_approval_id support** while it is in flight. Preserve additive approval history, repaired snapshots, all new outputs and subsequent customer writes; no migration-down, DB restore or queue replay. Documentation-only successor requires no service refresh.
+
 ## 4 November 2026 — unified previews, selected downloads and Bosta address DEPLOYED
 
 Application **18c5e493758116129f3d13ee758a502a3c7bc547** deployed from GitHub/AWS main **11:45:31UTC /13:45 Cairo**, base **322a40ff6130d643f18d71a45f34f4006f2b4b64**. Owner requested these additions before upload. Primary mobile/UI edits preserved. [Scope and tests](unified-preview-address-download-2026-11-04.md).
