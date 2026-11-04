@@ -1,26 +1,39 @@
-# علاج بطء صور المعاينة والإدارة — 5 نوفمبر 2026
+# Preview and administrative media latency — 5 November 2026
 
-مرجع البداية المراجع على AWS وGitHub: b4de4e60018535e61827e90e16143b48e2c81590. تنفيذ معزول codex/preview-media-latency-20261104، مع حفظ تعديلات الموبايل/الواجهة في النسخة الرئيسية.
+## Diagnosis
 
-المالك أكد استمرار البطء بعد تحسين polling والصلاحيات. قياس الرابط المرسل manifest60: HTML200/TTFB0.368ثانية/8284بايت. المتصفح المعزول الفعلي: DOM0.487ثانية، أول صورة49.9ثانية، load50.2ثانية. خمس صور متتابعة من عميلHTTP آخر: TTFB8.9–13.6ثانية،250–363KB لكل صورة محمية. نافذةNginx تضمنت نقل صور أصلية2–3MB في15–24ثانية، رغم أن upstreamبعضها أقلمن0.5ثانية؛ هذه مشكلة نقل منفصلة عن الرسم.
+AWS/GitHub base: b4de4e60018535e61827e90e16143b48e2c81590. Work is isolated in codex/preview-media-latency-20261104; primary mobile/UI edits remain intact.
 
-فحصCLIقراءة فقط للصورة الأولى نفسها: availability10ms،S3get+SHA271ms/2434092بايت، watermark7913ms. المرشح على نفس الأصل: S3get272ms،watermark1175ms. ظهرت تحذيراتFontconfigفيالأداتين؛ لا نمحوها أو نعتبرها أعطالطلب. اختبارصورةاصطناعية1400×1400علىPHP8.3:220→125ms؛ معاينة بصرية تؤكد التكرارالقطري للعلامة المائية.
+The supplied manifest60 page returned200 in0.368s/8284bytes, but a real isolated browser waited49.9s for its first image (load50.2s; other lazy images still incomplete). Separate sequential image GETs showed8.9–13.6sTTFB for250–363KB protected images. Read-only same-original CLI profiling separated S3+SHA271ms/2434092bytes from watermark rendering7913ms. Numeric Nginx samples also showed some2–3MB originals taking15–24s to transfer even with upstream below0.5s. These are separate rendering and transfer costs, missed by earlier HTML-only measurements.
 
-التغيير:
+## Implementation
 
-- رسم بلاطةعلامة مائية صغيرة وتكرارها على الصورة، بدل مئاتالرسمات على الصورةالكاملة وخارجحدودها. تبقى JPEGبحد1400وجودة80، علامةمائيةإجباريةوشروطالخصوصيةكماهي.
-- إعادةاستخدام نسخةJPEGالمحمية بخاصيةSHAللأصلوإعداداتالعلامةوالنسخة؛ تحقق أصلmanifestبالـSHAوصلاحيةالرابط/الـgallery/الطلب فيكلGETقبلالكاش. لاتخزينعام أو تغييرأجلروابط أو اعتماد/إرسال. الكاشمحليخاص تحتorder-thumbnails/protected،كتابةمؤقتةثمrename،وتنظيف7أيامبالمهمةالحالية؛الأصولوS3والتاريخمحفوظون.
-- كروتالمشاهدومحاولاتالهويةتستخدم400pxthumbnail،الفتحالمباشرللأصلدونتغيير. صلاحياتوصلةالطلب/المحاولةقبلالكاش،304خاصمشروطبإعادةالتحقق،ولا مساراتجديدة.
-- حذفحسابmetadataالمكررلنفسthumbnail،وعدّاداتالأوتوميشن تقرأحقولOrderالعدديةدونhydrationلكلنماذجالتاريخ. الاختبارالقديمكان110بدل50فيالنسخةالحيةأيضًا؛ أُصلحالمسارفعليًا بدلإضعافالاختبار. لاكاشصلاحياتأوعداداتبينالمستخدمين.
+- Render the diagonal watermark text once, compose a seamless small tile, then repeat it across the image. Preserve mandatory raster watermark, maximum1400px and JPEG quality80. Bound Imagick nested threads to1 only during rendering and restore the prior process limit on both success and failure.
+- Reuse private JPEG derivatives keyed by source SHA, all watermark settings and renderer version4. Every manifest GET still checks signature/expiry, run/order/gallery availability and the original SHA before reading the derivative. No public cache or original-image fallback. Local cache files live in order-thumbnails/protected, use temporary-file/rename publication and the existing seven-day derived-thumbnail cleanup. No customer originals/history deleted.
+- Administrative scene/identity cards use400px thumbnails; clicking still opens the original. Existing order ownership, photo permissions and cross-order checks run before conditional304 responses. Remove duplicate metadata lookup when computing an existing thumbnail path.
+- Counter projections read scalar order fields without hydrating all historical Order models. The existing hydration test failed110versus50 on the baseline too; the read path was fixed rather than weakening the assertion. No shared authorization/state cache.
 
-النشر المطلوبكودوقوالبفقط: لامهاجراتأوenv/config/routes/مواردAWSأوإعادةتشغيلعمال أوتوليدتاريخي. بناءlockfileمعالحفاظعلىالأصولالقديمة؛ viewcache/FPMفقط. قسمrunbookالمؤرخ سيحملSHAوالتحققونقطةالاسترجاعبعدالنشر.
+## Tests and build
 
-## التحقق المعزول
+PHP8.3.3, isolated synthetic SQLite and MySQL8.4, HTTP requests prohibited: each238tests/2782assertions pass after the stamp change. The final resource-limit/failure checks additionally pass9tests/121assertions on each engine. Tests cover old/signed links, revoked availability after a warm cache, changed original SHA, watermark-settings invalidation, private thumbnails/304, cross-order denial, permissions, counters/filters, approvals and production recovery. Pint/diff and isolated lockfile npmci/build pass. Build manifest/assets unchanged, all historical assets retained. Synthetic visual QA confirms repeated diagonal watermark coverage.
 
-PHP 8.3.3: نجح 238 اختبارًا / 2782 تأكيدًا على كل من SQLite وMySQL 8.4، مع HTTP خارجي ممنوع ووسائط وبيانات اصطناعية. تغطي الاختبارات الروابط القديمة والموقعة، إلغاء الإتاحة بعد تجهيز الكاش، رفض أصل تغيرت بصمته، تغير إعداد العلامة، هوية/مشاهد مصغرة مع 304 ومنع الوصول المتقاطع وسحب الصلاحيات، والفلاتر والعدادات والدفعات والاستئناف. نجح Pint وdiff والبناء من lockfile؛ manifest والأصول لم تتغير وكل الأصول القديمة محفوظة. فشل اختبار hydration في أول جولة وثبت نفس الفشل على baseline؛ أصلحنا تحميل الحقول لا الاختبار، والجولة النهائية كاملة ناجحة على القاعدتين.
+## Publication and measured outcome
 
-## Initial publication and cold-render follow-up
+Initial application2d5e5d707240a2723a3601762c278459b456508f deployed22:08:26UTC; final applicationbd7590b21ec2d18edb0324635b41a9b141a127f6 deployed22:14:05UTC on4November (00:14:05Cairo,5November). Initial tile approach improved warm access but cold browser load remained14.955s; the final stamp/thread follow-up further improved cold access.
 
-Application 2d5e5d707240a2723a3601762c278459b456508f published on AWS at 2026-11-04T22:08:25Z (5 November Cairo). Recovery /home/ubuntu/herokid-before-preview-latency-20261105. All source hashes and private config/environment/routes/manifest bytes verified; only Blade cache/FPM reload, worker PIDs preserved. Eight services active, scheduler success, failed_jobs83 unchanged. Initial80HTTP requests/zero5xx, zero new Laravel/Nginx errors. Exact preview browser: cold load14.955s/all5images15.449s; repeat load3.071s/all5images3.555s. Cold rendering therefore still needs improvement despite warm-cache gain; no blanket subsecond claim.
+Same supplied page, actual isolated browser after final publication:
 
-Follow-up renders the text once as a stamp, copies it into the repeating tile, and limits nested Imagick threads to1 during this render only, restoring the original resource limit even on failure. Cache renderer version4 separates the new derivative. Same original read-only CLI candidate: source216ms, render759ms. Synthetic visual QA shows the mandatory repeated diagonal text. PHP8.3 full SQLite/MySQL regression each238tests/2782assertions passed after stamp change; final resource-limit/corrupt-image regressions each9tests/121assertions passed. No infrastructure/config/worker change is needed; a scoped FPM refresh only. Final live evidence follows in the runbook.
+| Measurement | Cold derivatives | Repeated access |
+| --- | ---: | ---: |
+| HTML TTFB |331ms|244ms|
+| Browser load |6864ms|2346ms|
+| All five images loaded, including scrolling |7381ms|2831ms|
+| Image statuses |All200|All200|
+
+A final read-only CLI check of HK11-117 detail returned200 in1183.5ms; six private administrative thumbnails returned200 in62–317ms and13–26KB each. This is an authenticated application/media measurement, not a full authenticated-browser navigation. A separate under-load sample gave list3138ms/poll1103ms; the large list/detail HTML remains a further optimization opportunity. No universal latency or peak-load guarantee is claimed. Fontconfig warnings appeared in both old/candidate CLI probes; final live Nginx/Laravel windows had no new errors.
+
+At22:15:19UTC the final45HTTP-request window had zero5xx, zero new Laravel/Nginx/FPM errors, scheduler success and failed_jobs83 unchanged. All eight required services active. All Laravel, AutoPilot and Codex worker PIDs preserved; only Blade cache and graceful FPM reload for the initial release, FPM-only for the final render correction. No environment/private config/routes/schema/OS config or infrastructure changes; no customer approval/message/generation POST or historical replay.
+
+## Recovery
+
+Checkpoints /home/ubuntu/herokid-before-preview-latency-20261105 and /home/ubuntu/herokid-before-preview-latency-final-20261105 contain prior source archives/SHA, private environment/config/routes, manifest, worker/log baselines and file hashes. Private bytes and modes verified unchanged. Compatible code rollback may restore reviewed source/Blade cache with graceful FPM reload; retain all customer/media/ledger/queue state. No DB restore, destructive cache clear, original deletion or worker replay is part of recovery. Current dated runbook section records cumulative final verification.
