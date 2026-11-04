@@ -1,3 +1,7 @@
+# Current release status - 4 November 2026
+
+Deployed application70dd35e, activated15:34:28UTC after latest Main/AWS66d7bec merge. AI allowance2000/day with consumed attempts preserved; unlimited daily execution for all eligible active checkouts/six approved actions. Prior prepared-only/1000-limit sections below are historical. See [verified release](docs/autopilot-live-execution-2026-11-04.ar.md).551tests/6508assertions each SQLite/MySQL, plus concurrency checks pass. Initial three decisions verified; no execution admissions at15:38:49UTC, so end-to-end fulfillment is not claimed.
+
 # HeroKid Auto Pilot — controlled execution preparation (4 November 2026)
 
 ## Current owner instruction and verified base

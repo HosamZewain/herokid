@@ -1,5 +1,17 @@
 # HeroKid AWS deployment and agent handoff
 
+## 4 November 2026 - Auto Pilot execution and2000/day ACTIVATED
+
+Owner authorized production publication after latest Main/AWS review, then doubled AI allowance. Application **70dd35e8c55654a8e7555c82acb8f4ed540b2361**, base **66d7bec050fa4edda99145cb2825a82528db63a8**, preserves newer legacy-book/preview/storage releases. Nullable legacy manifests and admission guards are merged together. Activation **15:34:28UTC /17:34:28Cairo**. [Release, tests, limits and recovery](autopilot-live-execution-2026-11-04.ar.md).
+
+**Current settings: observe/evaluate=true, provider=codex, AI daily_limit=2000, execution enabled for all eligible active checkouts and six approved actions, execution.unlimited=true.** Preserve consumed attempts and unrelated private cached settings. Older1000/300/100 notes and deferred-publication sections below are historical. Model isolation/ChatGPT-only zero-tool checks remain; a separate trusted executor performs policy-gated admission. Manual pauses/consent/payment/ownership/deduplication remain enforced.
+
+54changed-file hashes/readability verified. One exact additive migration creates ai_production_controls/ai_production_executions before readers activate. Private .env unchanged; only agentic.execution and agentic.daily_limit updated. Existing source mode/untracked assets retained. Four Laravel workers gracefully replaced after accepted work; Auto Pilot1876303 active, Codex1318728 preserved. No general migration, queue replay, synthetic production test, new resource or change to local-retention cron.
+
+Isolated PHP8.3 SQLite/MySQL8.4 EACH551tests/6508assertions pass;46focused/298assertions each plus2real-commit MySQL race tests/9assertions. Build/manifest/Pint/diff pass, assets unchanged from latest main and historical assets retained. Authenticated dashboard/order audit show2000/unlimited. Observation refreshed255active checkouts without errors/model calls. At15:38:49UTC,1003/2000attempts, three new verified ChatGPT zero-tool results; **no execution admission yet**. Activation and decisions are verified, not end-to-end production/message completion. HTTPS home/up/cart200, required services and scheduler healthy, failed_jobs83unchanged, zero new Laravel/Nginx or worker errors in bounded initial verification.
+
+Recovery **/home/ubuntu/herokid-before-autopilot-live-20261104**, fresh **herokid-20261104T152818Z.sql.gz** gzip/localSHA/S3size+SHA verified. Stop new admissions to pause; preserve later receipts, outputs, memory, quota and customer writes. No DB restore/migration-down/queue replay. Documentation successor requires no worker refresh.
+
 ## 4 November 2026 — root storage60GiB and verified Codex local retention DEPLOYED
 
 Owner explicitly requested “ارفع المساحة ل60 وضيف سياسة التنظيف بعد الحفظ عليS3”. IAM role lacks EC2 volume modification; Chrome control failed technically after login. Owner changed volume **vol-03a33ab7c4622a210** to60GiB and confirmed “تم”. SSH verified64424509440bytes, exact serial and ext4; checkpointed partition map, reviewed growpart dry-run, then grew partition1 and resized ext4 online. Filesystem **61285326848bytes**; usage fell95%→47%, later46% after cleanup. No reboot or generation interruption. Capacity checkpoint **/home/ubuntu/herokid-before-root-60g-20261104**. [Policy, checks and recovery](storage-retention-2026-11-04.ar.md).
