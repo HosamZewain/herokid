@@ -106,10 +106,25 @@ class LegacyBookAdmission
             throw new LegacyBookReviewRequired('عدد صفحات الاختيار أو مكونات الكتاب غير مكتملة. راجع اختيار المنتج وإعداداته قبل التجهيز.');
         }
         $copy->variant_snapshot = array_merge($item->variant_snapshot ?? [], ['book_page_count' => (int) $pages]);
-        $copy->setRelation('productionComponents', $components->map(fn ($c) => new OrderItemProductionComponent([
-            'product_production_component_id' => $modern ? $c->product_production_component_id : $c->id, 'sort_order' => $c->sort_order, 'stable_key' => $c->stable_key, 'name' => $c->name, 'production_stage' => $c->production_stage,
-            'prompt_template' => $c->prompt_template, 'quantity_per_item' => $c->production_stage === 'book_interior' ? $pages : 1,
-        ])));
+        // Retiring a component does not free its unique item/key pair. Reserve
+        // archived keys too, keeping every historical ID, brief and unit intact.
+        $reserved = $modern ? [] : DB::table('order_item_production_components')->where('order_item_id', $item->id)->pluck('stable_key')->flip()->all();
+        $copy->setRelation('productionComponents', $components->map(function ($c) use ($modern, $pages, &$reserved) {
+            $key = $c->stable_key;
+            if (! $modern && isset($reserved[$key])) {
+                $base = 'legacy-'.$c->production_stage.'-'.$c->id;
+                $key = $base;
+                for ($suffix = 2; isset($reserved[$key]); $suffix++) {
+                    $key = $base.'-'.$suffix;
+                }
+            }
+            $reserved[$key] = true;
+
+            return new OrderItemProductionComponent([
+                'product_production_component_id' => $modern ? $c->product_production_component_id : $c->id, 'sort_order' => $c->sort_order, 'stable_key' => $key, 'name' => $c->name, 'production_stage' => $c->production_stage,
+                'prompt_template' => $c->prompt_template, 'quantity_per_item' => $c->production_stage === 'book_interior' ? $pages : 1,
+            ]);
+        }));
 
         return $copy;
     }

@@ -294,4 +294,61 @@ class LegacyBookAdmissionTest extends TestCase
         $this->assertNull(app(BookPageService::class)->admissionReason($item->fresh()));
         $this->assertDatabaseCount('order_previews', 1);
     }
+
+    public function test_legacy_catalog_key_collision_preserves_old_brief_and_starts_with_existing_cover(): void
+    {
+        $item = $this->fixture(20);
+        $old = $item->productionComponents->sole();
+        $catalog = $item->product->productionComponents()->where('production_stage', 'book_interior')->sole();
+        $current = $catalog->only(['name', 'production_stage', 'prompt_template', 'quantity_per_item', 'sort_order', 'is_active']);
+        $catalog->delete();
+        $catalog = $item->product->productionComponents()->where('stable_key', $old->stable_key)->sole();
+        $catalog->update($current);
+        $before = $old->getAttributes();
+        $preview = OrderPreview::sole();
+        $files = Storage::disk('s3_private')->allFiles();
+        $offers = app(LegacyBookAdmission::class)->offers($item->fresh());
+        $this->assertSame(20, $offers[0]['pages']);
+        $this->post(route('admin.orders.workspace.legacy-book-approve', [$item->order, $item]), [
+            'confirm' => 1, 'preview_token' => $offers[0]['token'],
+        ])->assertRedirect(route('admin.orders.groups.show', $item->order))->assertSessionHasNoErrors();
+        $old = $old->fresh();
+        $this->assertNotNull($old->retired_at);
+        foreach (['id', 'stable_key', 'prompt_template', 'production_stage', 'quantity_per_item'] as $field) {
+            $this->assertSame($before[$field], $old->getAttributes()[$field]);
+        }
+        $interior = $item->fresh()->productionComponents->firstWhere('production_stage', 'book_interior');
+        $this->assertNotSame($old->stable_key, $interior->stable_key);
+        $this->assertSame($catalog->id, $interior->product_production_component_id);
+        $this->assertSame(20, $interior->quantity_per_item);
+        $this->assertSame($before['prompt_template'], LegacyBookCoverApproval::sole()->configuration_before['components'][0]['prompt_template']);
+        $run = app(BookPageService::class)->start($item->fresh(), null, true);
+        $this->assertSame(20, $run->scene_count);
+        $this->assertSame($preview->id, $run->snapshot['preview_id']);
+        $this->assertSame($run->fingerprint, app(BookPageService::class)->fingerprint($run));
+        $this->assertSame($files, Storage::disk('s3_private')->allFiles());
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
+    public function test_retired_cover_keys_are_reserved_and_reapproval_keeps_the_new_unit_key(): void
+    {
+        $item = $this->fixture();
+        $cover = $item->product->productionComponents()->where('production_stage', 'book_cover')->sole();
+        foreach ([$cover->stable_key, 'legacy-book_cover-'.$cover->id] as $key) {
+            $item->productionComponents()->create(['stable_key' => $key, 'name' => 'Historical component',
+                'production_stage' => 'standard', 'quantity_per_item' => 1, 'prompt_template' => 'Retained history', 'retired_at' => now()]);
+        }
+        $old = DB::table('order_item_production_components')->where('order_item_id', $item->id)->whereNotNull('retired_at')->orderBy('id')->get()->toJson();
+        $this->approve($item->fresh());
+        $unit = $item->fresh()->productionComponents->firstWhere('production_stage', 'book_cover');
+        $this->assertSame('legacy-book_cover-'.$cover->id.'-2', $unit->stable_key);
+        $this->assertSame($old, DB::table('order_item_production_components')->where('order_item_id', $item->id)->whereIn('stable_key', [$cover->stable_key, 'legacy-book_cover-'.$cover->id])->orderBy('id')->get()->toJson());
+        $item->order->updateQuietly(['parent_notes' => 'Reviewed additional instruction']);
+        $this->approve($item->fresh());
+        $this->assertSame($unit->id, $item->fresh()->productionComponents->firstWhere('production_stage', 'book_cover')->id);
+        $this->assertSame($unit->stable_key, $item->fresh()->productionComponents->firstWhere('production_stage', 'book_cover')->stable_key);
+        $this->assertDatabaseCount('legacy_book_cover_approvals', 2);
+        $this->assertNull(app(BookPageService::class)->admissionReason($item->fresh()));
+    }
 }
