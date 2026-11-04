@@ -97,6 +97,9 @@ References: [OpenAI proxy limitations](https://learn.chatgpt.com/docs/enterprise
    one provider call at a time. No API-key or mock fallback, no paid generation,
    customer message, printing, payment approval or shipping execution. MCP stays
    off unless its read-only integration is specifically requested.
+   The worker entrypoint changes logging to stderr in its own process so a separate
+   OS user never creates/chmods the web application's shared log. Preserve the
+   existing production log permissions and cached logging configuration.
 10. Verify actual deployed SHA/file hashes, private config preservation, permissions,
     public HTTPS, authenticated dashboard/memory/activity, observer freshness,
     quota, new log bytes and existing worker health. Record live evidence in the

@@ -11,7 +11,7 @@ Group=herokid-autopilot
 SupplementaryGroups=www-data
 WorkingDirectory=/var/www/herokid
 ExecStartPre=/usr/bin/test -r /var/www/herokid/bootstrap/cache/config.php
-ExecStart=/usr/bin/php /var/www/herokid/artisan queue:work agentic-shadow --queue=agentic-shadow --sleep=3 --tries=1 --timeout=1000 --memory=256
+ExecStart=/usr/bin/php /var/www/herokid/ops/agentic/deploy/worker.php queue:work agentic-shadow --queue=agentic-shadow --sleep=3 --tries=1 --timeout=1000 --memory=256
 KillSignal=SIGTERM
 KillMode=process
 TimeoutStopSec=1100
