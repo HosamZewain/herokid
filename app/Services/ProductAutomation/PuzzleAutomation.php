@@ -3,6 +3,7 @@
 namespace App\Services\ProductAutomation;
 
 use App\DTOs\Ai\GptImageRequest;
+use App\Exceptions\GptImageException;
 use App\Models\AiModel;
 use App\Models\Order;
 use App\Models\OrderAttachment;
@@ -22,6 +23,7 @@ use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\PreviewRegenerationGuard;
 use App\Support\AdminActivityLogger;
 use App\Support\BookArtwork;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -101,13 +103,13 @@ class PuzzleAutomation
         return hash('sha256', json_encode([$attachments, $previews], JSON_THROW_ON_ERROR));
     }
 
-    public function regenerate(Order $order, OrderItem $item, User $actor, int $previousId, ?string $promptOverride = null): PuzzleGeneration
+    public function regenerate(Order $order, OrderItem $item, User $actor, int $previousId, ?string $promptOverride = null, bool $authorizeUncertainRetry = false): PuzzleGeneration
     {
         abort_unless($actor->is_active && ! $actor->agent_api_enabled && $actor->hasPermission('orders.update')
             && $actor->hasPermission('orders.photos.view') && $actor->hasPermission('orders.production_prompt.manage'), 403);
         abort_unless($item->order_id === $order->id, 404);
 
-        return DB::transaction(function () use ($order, $item, $actor, $previousId, $promptOverride) {
+        return DB::transaction(function () use ($order, $item, $actor, $previousId, $promptOverride, $authorizeUncertainRetry) {
             $rows = Order::where('checkout_group_key', $order->checkoutGroupKey())->orderBy('id')->lockForUpdate()->get();
             $order = $rows->firstWhere('id', $order->id);
             abort_unless($order, 404);
@@ -118,14 +120,18 @@ class PuzzleAutomation
             if ($duplicate = $runs->firstWhere('previous_run_id', $previousId)) {
                 return $duplicate; // Double-click/replayed form never creates another paid call.
             }
+            $recovering = $authorizeUncertainRetry && $previous->canAuthorizeUncertainRetry();
             if (! $this->enabled() || $runs->last()->id !== $previousId
-                || ! in_array($previous->status, ['succeeded', 'review', 'blocked'], true)
-                || $runs->contains(fn ($r) => in_array($r->status, ['queued', 'processing', 'uncertain'], true))
+                || (! $recovering && ! in_array($previous->status, ['succeeded', 'review', 'blocked'], true))
+                || $runs->contains(fn ($r) => in_array($r->status, ['queued', 'processing', 'uncertain'], true) && ! ($recovering && $r->id === $previous->id))
                 || app(AutomationAssignment::class)->owns($order)) {
                 throw ValidationException::withMessages(['product_generation' => 'انتظر انتهاء التنفيذ الحالي أو راجع المحاولة غير المؤكدة، ثم استلم الطلب يدويًا إذا كان تحت مسؤولية الأوتوميشن.']);
             }
             $this->assertRegenerationStage($rows);
             app(PreviewRegenerationGuard::class)->check($order);
+            if ($recovering) {
+                $this->assertNoUnrecordedOutput($previous);
+            }
             try {
                 $context = app(PuzzleInputs::class)->capture($item, $promptOverride);
                 if ($promptOverride !== null) {
@@ -135,6 +141,14 @@ class PuzzleAutomation
                 throw ValidationException::withMessages(['product_generation' => 'راجع برومبت المنتج وصوره: '.$this->safeError($error, 'puzzle_preflight_failed')]);
             }
             $context['output_baseline'] = $this->outputBaseline($order->id, $context['unit_key']);
+            if ($recovering) {
+                // Release only this finished attempt's unique slot, atomically with its
+                // replacement. Preserve receipt, error, billing and original input fields.
+                $previous->update(['status' => 'retry_authorized', 'context' => array_merge($previous->context ?? [], [
+                    'retry_authorization' => ['actor_id' => $actor->id, 'at' => now()->toIso8601String(),
+                        'previous_status' => 'uncertain', 'additional_charge_acknowledged' => true],
+                ])]);
+            }
             $run = PuzzleGeneration::create(['order_id' => $order->id, 'order_item_id' => $item->id,
                 'event_id' => $previous->event_id, 'checkout_key' => $order->checkoutGroupKey(), 'unit_key' => $context['unit_key'],
                 'attempt_number' => $previous->attempt_number + 1, 'previous_run_id' => $previous->id,
@@ -142,10 +156,31 @@ class PuzzleAutomation
                 'context' => $context, 'status' => 'queued']);
             AdminActivityLogger::log('order.product_regeneration_requested', 'طلب إعادة توليد صورة هذا المنتج بالبيانات الحالية مع الاحتفاظ بالصور السابقة.', $order,
                 ['run_id' => $run->id, 'previous_run_id' => $previous->id, 'order_item_id' => $item->id,
-                    'attempt_number' => $run->attempt_number, 'estimate_usd' => $context['estimate_usd']], $actor);
+                    'attempt_number' => $run->attempt_number, 'estimate_usd' => $context['estimate_usd'],
+                    'uncertain_retry_authorized' => $recovering, 'previous_billing_status' => $previous->billing_status], $actor);
 
             return $run;
         }, 3);
+    }
+
+    private function assertNoUnrecordedOutput(PuzzleGeneration $run): void
+    {
+        // A storage write may have succeeded before its DB receipt failed. Never
+        // hide that output or replace it automatically with another paid call.
+        try {
+            foreach (array_unique(array_filter([$run->disk, config('media.private_disk', 'local')])) as $disk) {
+                foreach (['png', 'jpg', 'webp'] as $extension) {
+                    if (Storage::disk($disk)->exists('order-attachments/'.$run->order_id.'/puzzle-'.$run->id.'.'.$extension)) {
+                        throw new RuntimeException('retained_output');
+                    }
+                }
+                if (Storage::disk($disk)->exists('order-attachments/'.$run->order_id.'/book-cover-'.$run->id.'-a4.png')) {
+                    throw new RuntimeException('retained_output');
+                }
+            }
+        } catch (Throwable) {
+            throw ValidationException::withMessages(['product_generation' => 'توجد صورة تحتاج مراجعة أو تعذر التحقق من التخزين. لم تبدأ محاولة جديدة؛ يلزم مراجعة الصورة المحفوظة أولًا.']);
+        }
     }
 
     private function assertRegenerationStage($rows): void
@@ -327,8 +362,11 @@ class PuzzleAutomation
             });
         } catch (Throwable $error) {
             $run->refresh();
+            $failure = $this->failureDetails($error, $run->id, $submitted);
             $run->update(['status' => $run->output_path ? 'review' : ($submitted ? 'uncertain' : 'blocked'),
-                'error_code' => $this->safeError($error, $submitted ? 'puzzle_result_uncertain' : 'puzzle_inputs_failed'),
+                'error_code' => $failure['code'],
+                'context' => array_merge($run->context ?? [], ['failure' => $failure]),
+                'provider_request_id' => $run->provider_request_id ?: $failure['provider_request_id'],
                 'billing_status' => $run->provider_request_id ? $run->billing_status : ($submitted ? 'unknown' : 'not_billable'),
                 'finished_at' => now(), 'lease_until' => null]);
         }
@@ -374,6 +412,33 @@ class PuzzleAutomation
             || ! hash_equals($checksum, hash('sha256', Storage::disk($disk)->get($path)))) {
             throw new RuntimeException('puzzle_storage_failed');
         }
+    }
+
+    private function failureDetails(Throwable $error, int $runId, bool $submitted): array
+    {
+        $code = $this->safeError($error, $submitted ? 'puzzle_result_uncertain' : 'puzzle_inputs_failed');
+        $requestId = null;
+        $status = null;
+        if ($error instanceof GptImageException) {
+            $status = $error->getPrevious() instanceof RequestException ? $error->getPrevious()->response?->status() : null;
+            $code = match (true) {
+                $error->errorCode === 'provider_connection_failed' => 'puzzle_provider_connection',
+                in_array($error->errorCode, ['insufficient_quota', 'billing_hard_limit_reached'], true) => 'puzzle_provider_billing',
+                $status === 429 => 'puzzle_provider_rate_limit',
+                in_array($error->errorCode, ['provider_unavailable', 'missing_credential'], true), in_array($status, [401, 403], true) => 'puzzle_provider_unavailable',
+                in_array($error->errorCode, ['missing_output', 'invalid_output_image', 'unsafe_output_url'], true) => 'puzzle_provider_output',
+                in_array($status, [400, 404, 422], true) => 'puzzle_provider_rejected',
+                in_array($error->errorCode, ['missing_input_photos', 'input_processing_failed'], true) => 'puzzle_inputs_failed',
+                default => 'puzzle_provider_failed',
+            };
+            if (is_string($error->providerRequestId) && preg_match('/\A[A-Za-z0-9_.:-]{1,120}\z/', $error->providerRequestId)) {
+                $requestId = $error->providerRequestId;
+            }
+        }
+
+        // No provider message/body, prompt, URL, customer photo or credential.
+        return ['code' => $code, 'http_status' => $status, 'provider_request_id' => $requestId,
+            'client_request_id' => 'puzzle-'.$runId, 'at' => now()->toIso8601String()];
     }
 
     private function safeError(Throwable $error, string $fallback): string

@@ -48,7 +48,7 @@ class OrderAutomationSummary
         $confirmations = DB::table('robodesk_integration_events')->whereIn('checkout_group_key', $keys)->where('event_type', 'order.pending_confirmation')->orderBy('id')->get(['id', 'checkout_group_key', 'status', 'updated_at'])->groupBy('checkout_group_key');
         $identities = DB::table('order_process_identities')->whereIn('run_id', $processes->flatten(1)->pluck('id'))->get(['id', 'run_id', 'order_id', 'status', 'error_code', 'updated_at'])->groupBy('run_id');
         $manualIdentities = DB::table('order_identity_regenerations')->whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'status', 'error_code', 'updated_at'])->groupBy('checkout_key');
-        $products = PuzzleGeneration::whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'status', 'error_code', 'context', 'updated_at'])->groupBy('checkout_key');
+        $products = PuzzleGeneration::whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'status', 'error_code', 'context', 'updated_at', 'finished_at', 'lease_until', 'output_path', 'attachment_id', 'preview_id'])->groupBy('checkout_key');
         $scenes = CodexSceneRun::whereIn('checkout_key', $keys)->orderBy('created_at')->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'production_kind', 'status', 'book_pdf', 'scenes', 'scene_count', 'error_code', 'updated_at'])->groupBy('checkout_key');
         $books = DB::table('order_items')->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('order_item_production_components as component', 'component.order_item_id', '=', 'order_items.id')
@@ -139,7 +139,7 @@ class OrderAutomationSummary
                 $state = match ($product->status) {
                     'processing' => 'running','queued' => 'queued','succeeded' => 'idle',default => 'intervention'
                 };
-                $add($stage, $state, self::STAGES[$stage].' #'.$product->order_item_id.' — '.(PuzzleGeneration::LABELS[$product->status] ?? $product->status), $product->updated_at, $product->error_code, $product->order_id, $product->status === 'succeeded' ? 1 : 0, 1);
+                $add($stage, $state, self::STAGES[$stage].' #'.$product->order_item_id.' — '.(PuzzleGeneration::LABELS[$product->status] ?? $product->status), $product->updated_at, $product->status === 'uncertain' && $product->canAuthorizeUncertainRetry() ? 'أوقف الأوتوميشن بأمان، ثم استخدم إعادة التوليد من بند المنتج مع الموافقة على محاولة جديدة.' : (PuzzleGeneration::ERRORS[$product->error_code] ?? $product->error_code), $product->order_id, $product->status === 'succeeded' ? 1 : 0, 1);
             }
             foreach ($scenes->get($key, collect())->keyBy(fn ($run) => $run->order_id.':'.($run->order_item_id ?? 'story')) as $run) {
                 $done = collect($run->scenes ?? [])->filter(fn ($s, $number) => ctype_digit((string) $number) && (int) $number >= 1 && (int) $number <= ($run->scene_count ?? 13) && ! empty($s['path']) && ! empty($s['sha256']))->count();

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\DTOs\Ai\GptImageRequest;
 use App\DTOs\Ai\GptImageResult;
+use App\Exceptions\GptImageException;
 use App\Jobs\TickPuzzleAutomation;
 use App\Models\AdminActivityLog;
 use App\Models\AiProvider;
@@ -21,8 +22,11 @@ use App\Services\Ai\GptImageClient;
 use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\ProductAutomation\PuzzleAutomation;
+use GuzzleHttp\Psr7\Response;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -64,6 +68,154 @@ class PuzzleAutomationTest extends TestCase
         app(AiProviderCredentialService::class)->save($provider, 'synthetic-key');
         $this->product = Product::create(['slug' => 'personalized-child-adventure-hdf-puzzle', 'name_ar' => 'بازل اختبار', 'price_cents' => 10000, 'is_active' => true,
             'production_prompt_template' => 'One puzzle for {{child_full_name}}, {{child_age}}. {{child_image_references}}']);
+    }
+
+    public function test_finished_uncertain_retry_requires_explicit_ack_and_preserves_receipt_history(): void
+    {
+        $actor = $this->staff();
+        $order = $this->order();
+        $service = app(PuzzleAutomation::class);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andThrow(new \RuntimeException('private payload'));
+        $service->tick();
+        $previous = PuzzleGeneration::sole();
+        $oldContext = $previous->context;
+        $oldFinished = $previous->finished_at;
+        $url = route('admin.orders.products.regenerate', [$order, $order->items()->first()]);
+        $payload = ['previous_run_id' => $previous->id, 'confirm' => 1, 'authorize_uncertain_retry' => 1];
+        // A stale/live automation owner cannot be bypassed by the new checkbox.
+        $this->post($url, $payload)->assertSessionHasErrors('product_generation');
+        $this->handoff($order, 'take');
+        $this->post($url, ['previous_run_id' => $previous->id, 'confirm' => 1])->assertSessionHasErrors('product_generation');
+        $this->post($url, $payload)->assertSessionHasNoErrors();
+        $next = PuzzleGeneration::latest('id')->first();
+        $this->assertSame('queued', $next->status);
+        $this->assertSame($previous->id, $next->previous_run_id);
+        $this->assertSame($actor->id, $next->requested_by);
+        $previous->refresh();
+        $this->assertSame('retry_authorized', $previous->status);
+        $this->assertNull($previous->active_item_id);
+        $this->assertSame('unknown', $previous->billing_status);
+        $this->assertSame('puzzle_result_uncertain', $previous->error_code);
+        $this->assertTrue($previous->finished_at->equalTo($oldFinished));
+        $this->assertSame($oldContext, array_diff_key($previous->context, ['retry_authorization' => true]));
+        $this->assertSame($actor->id, $previous->context['retry_authorization']['actor_id']);
+        $this->post($url, $payload)->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('puzzle_generations', 2);
+        $this->fakeImage();
+        $service->tick();
+        $this->assertSame('succeeded', $next->fresh()->status);
+        $this->handoff($order, 'resume');
+        $this->assertDatabaseCount('puzzle_generations', 2);
+        $audit = AdminActivityLog::where('action', 'order.product_regeneration_requested')->latest('id')->first();
+        $this->assertTrue($audit->properties['uncertain_retry_authorized']);
+        Http::assertNothingSent();
+    }
+
+    public function test_uncertain_retry_rejects_unfinished_leased_saved_and_cancelled_attempts(): void
+    {
+        $this->staff();
+        $order = $this->order();
+        $service = app(PuzzleAutomation::class);
+        $service->enroll();
+        $previous = PuzzleGeneration::sole();
+        $previous->update(['status' => 'uncertain', 'finished_at' => now(), 'lease_until' => null, 'billing_status' => 'unknown']);
+        $this->handoff($order, 'take');
+        $url = route('admin.orders.products.regenerate', [$order, $order->items()->first()]);
+        $payload = ['previous_run_id' => $previous->id, 'confirm' => 1, 'authorize_uncertain_retry' => 1];
+        $this->mock(GptImageClient::class)->shouldNotReceive('generate');
+        foreach ([['finished_at' => null], ['lease_until' => now()->subHour()], ['output_path' => 'retained.png'], ['preview_id' => 123]] as $state) {
+            $previous->update(array_merge(['finished_at' => now(), 'lease_until' => null, 'output_path' => null, 'preview_id' => null], $state));
+            $this->post($url, $payload)->assertSessionHasErrors('product_generation');
+            $this->assertSame('uncertain', $previous->fresh()->status);
+        }
+        $previous->update(['preview_id' => null]);
+        // A file written before a failed DB receipt must not be silently discarded.
+        $path = 'order-attachments/'.$order->id.'/puzzle-'.$previous->id.'.png';
+        Storage::disk('local')->put($path, $this->png);
+        $this->post($url, $payload)->assertSessionHasErrors('product_generation');
+        $this->assertSame($this->png, Storage::disk('local')->get($path));
+        Storage::disk('local')->delete($path);
+        $order->updateQuietly(['status' => 'cancelled']);
+        $this->post($url, $payload)->assertSessionHasErrors('product_generation');
+        $this->assertDatabaseCount('puzzle_generations', 1);
+        $this->assertSame('uncertain', $previous->fresh()->status);
+        Http::assertNothingSent();
+    }
+
+    public function test_uncertain_retry_preflight_failure_does_not_release_old_fence(): void
+    {
+        $this->staff();
+        $order = $this->order();
+        app(PuzzleAutomation::class)->enroll();
+        $previous = PuzzleGeneration::sole();
+        $previous->update(['status' => 'uncertain', 'finished_at' => now(), 'lease_until' => null]);
+        $this->handoff($order, 'take');
+        $order->updateQuietly(['uploaded_photos' => []]);
+        $this->post(route('admin.orders.products.regenerate', [$order, $order->items()->first()]),
+            ['previous_run_id' => $previous->id, 'confirm' => 1, 'authorize_uncertain_retry' => 1])->assertSessionHasErrors();
+        $this->assertSame('uncertain', $previous->fresh()->status);
+        $this->assertSame($previous->order_item_id, $previous->fresh()->active_item_id);
+        $this->assertDatabaseCount('puzzle_generations', 1);
+    }
+
+    public function test_product_provider_failure_retains_only_structured_diagnostics_without_retry(): void
+    {
+        $order = $this->order();
+        $response = new \Illuminate\Http\Client\Response(new Response(429, [], '{"error":{"message":"private customer body"}}'));
+        $error = new GptImageException('private exception text', 'insufficient_quota', 'req_synthetic', true,
+            new RequestException($response));
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andThrow($error);
+        app(PuzzleAutomation::class)->tick();
+        app(PuzzleAutomation::class)->tick();
+        $run = PuzzleGeneration::sole();
+        $this->assertSame('uncertain', $run->status);
+        $this->assertSame('unknown', $run->billing_status);
+        $this->assertSame('puzzle_provider_billing', $run->error_code);
+        $this->assertSame('req_synthetic', $run->provider_request_id);
+        $this->assertSame(429, $run->context['failure']['http_status']);
+        $this->assertStringNotContainsString('private', json_encode($run->context['failure']));
+        Http::assertNothingSent();
+    }
+
+    public function test_real_client_connection_loss_is_classified_and_never_retried(): void
+    {
+        $this->order();
+        Http::fake(fn () => throw new ConnectionException('private request payload'));
+        app(PuzzleAutomation::class)->tick();
+        app(PuzzleAutomation::class)->tick();
+        $run = PuzzleGeneration::sole();
+        $this->assertSame('puzzle_provider_connection', $run->error_code);
+        $this->assertSame('uncertain', $run->status);
+        $this->assertSame('unknown', $run->billing_status);
+        $this->assertStringNotContainsString('private', json_encode($run->context['failure']));
+        $this->assertDatabaseCount('puzzle_generations', 1);
+    }
+
+    public function test_real_client_valid_image_still_publishes_once(): void
+    {
+        $this->order();
+        Http::fake(['api.openai.com/*' => Http::response(['data' => [['b64_json' => base64_encode($this->png)]]], 200, ['x-request-id' => 'req_success'])]);
+        app(PuzzleAutomation::class)->tick();
+        app(PuzzleAutomation::class)->tick();
+        $run = PuzzleGeneration::sole();
+        $this->assertSame('succeeded', $run->status);
+        $this->assertSame('req_success', $run->provider_request_id);
+        Storage::disk('local')->assertExists($run->output_path);
+        $this->assertDatabaseCount('order_attachments', 1);
+        Http::assertSentCount(1);
+    }
+
+    public function test_real_client_invalid_image_retains_provider_receipt(): void
+    {
+        $this->order();
+        Http::fake(['api.openai.com/*' => Http::response(['data' => [['b64_json' => base64_encode('invalid private output')]]], 200, ['x-request-id' => 'req_output'])]);
+        app(PuzzleAutomation::class)->tick();
+        $run = PuzzleGeneration::sole();
+        $this->assertSame('puzzle_provider_output', $run->error_code);
+        $this->assertSame('req_output', $run->provider_request_id);
+        $this->assertSame('unknown', $run->billing_status);
+        $this->assertNull($run->output_path);
+        Http::assertSentCount(1);
     }
 
     public function test_regeneration_prompt_override_is_scoped_to_attempt_and_uses_current_product_photos(): void

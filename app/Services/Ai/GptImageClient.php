@@ -5,6 +5,7 @@ namespace App\Services\Ai;
 use App\DTOs\Ai\GptImageRequest;
 use App\DTOs\Ai\GptImageResult;
 use App\Exceptions\GptImageException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
@@ -40,6 +41,8 @@ class GptImageClient
             throw new GptImageException('يجب إرفاق صور مرجعية قبل إنشاء الهوية.', 'missing_input_photos');
         }
 
+        $submitted = false;
+        $requestId = null;
         try {
             $textOnly = $request->allowTextOnly && $request->inputImages === [];
             $client = $this->client($request)
@@ -70,12 +73,14 @@ class GptImageClient
                 $payload['input_fidelity'] = 'high';
             }
 
+            $submitted = true;
             $response = $client->post('https://api.openai.com/v1/images/'.($textOnly ? 'generations' : 'edits'), $payload);
             $json = $response->throw()->json();
-            $output = $this->extractOutput($request, $json);
             $requestId = $this->safeId(
                 (string) ($response->header('x-request-id') ?: data_get($json, 'id') ?: 'openai-image-'.Str::uuid())
             );
+
+            $output = $this->extractOutput($request, $json);
 
             return new GptImageResult(
                 contents: $output['contents'],
@@ -91,7 +96,12 @@ class GptImageClient
                 ],
             );
         } catch (GptImageException $exception) {
-            throw $exception;
+            throw new GptImageException($exception->getMessage(), $exception->errorCode,
+                $exception->providerRequestId ?: $requestId,
+                $submitted || $exception->providerMayHaveBilled, $exception);
+        } catch (ConnectionException $exception) {
+            throw new GptImageException('انقطع الاتصال بمزود الصور دون استلام نتيجة مؤكدة.',
+                'provider_connection_failed', $requestId, $submitted, $exception);
         } catch (RequestException $exception) {
             $providerRequestId = $this->safeId((string) $exception->response?->header('x-request-id'));
             $errorCode = $this->safeId((string) data_get($exception->response?->json(), 'error.code'));
@@ -123,9 +133,10 @@ class GptImageClient
             );
         } catch (RuntimeException $exception) {
             throw new GptImageException(
-                $exception->getMessage(),
-                'input_processing_failed',
-                providerMayHaveBilled: false,
+                'تعذر تجهيز أو استلام الصورة.',
+                $submitted ? 'unexpected_provider_error' : 'input_processing_failed',
+                providerRequestId: $requestId,
+                providerMayHaveBilled: $submitted,
                 previous: $exception,
             );
         } catch (\Throwable $exception) {
@@ -138,7 +149,8 @@ class GptImageClient
             throw new GptImageException(
                 'تعذر إنشاء الصورة حاليًا. يرجى إعادة المحاولة لاحقًا.',
                 'unexpected_provider_error',
-                providerMayHaveBilled: true,
+                providerRequestId: $requestId,
+                providerMayHaveBilled: $submitted,
                 previous: $exception,
             );
         }

@@ -14,8 +14,8 @@ class PuzzleGenerationController extends Controller
 {
     public function regenerate(Request $request, Order $order, OrderItem $item, PuzzleAutomation $service)
     {
-        $data = $request->validate(['previous_run_id' => ['required', 'integer', 'min:1'], 'confirm' => ['required', 'accepted'], 'prompt' => ['nullable', 'string', 'min:20', 'max:65000']]);
-        $service->regenerate($order, $item, $request->user(), $data['previous_run_id'], $data['prompt'] ?? null);
+        $data = $request->validate(['previous_run_id' => ['required', 'integer', 'min:1'], 'confirm' => ['required', 'accepted'], 'authorize_uncertain_retry' => ['sometimes', 'accepted'], 'prompt' => ['nullable', 'string', 'min:20', 'max:65000']]);
+        $service->regenerate($order, $item, $request->user(), $data['previous_run_id'], $data['prompt'] ?? null, $request->boolean('authorize_uncertain_retry'));
 
         return back()->with('success', 'تم تسجيل محاولة إعادة التوليد لهذا المنتج فقط؛ ستُضاف الصورة الجديدة مع الاحتفاظ بالصور السابقة.');
     }

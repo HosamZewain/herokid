@@ -1147,6 +1147,39 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertEqualsWithDelta(297 / 210, $scene['height'] / $scene['width'], .002);
     }
 
+    public function test_finished_uncertain_cover_can_be_retried_then_returned_to_preview_flow(): void
+    {
+        $this->actor->permissions()->syncWithoutDetaching(Permission::whereIn('key', ['orders.production_prompt.manage', 'orders.automation.control', 'orders.view_all'])->pluck('id'));
+        $item = $this->book();
+        $run = $this->enroll($item->order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andThrow(new \RuntimeException('uncertain'));
+        $previous = PuzzleGeneration::sole();
+        app(PuzzleAutomation::class)->generate($previous->id);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('blocked', $run->fresh()->status);
+        $this->actingAs($this->actor->fresh());
+        $this->get(route('admin.orders.groups.show', $item->order))->assertOk()->assertSee('authorize_uncertain_retry', false)->assertSee('إعادة توليد الكفر');
+        $this->post(route('admin.orders.groups.assignment.automation', $item->order), ['action' => 'take'])->assertSessionHasNoErrors();
+        $this->post(route('admin.orders.products.regenerate', [$item->order, $item]),
+            ['previous_run_id' => $previous->id, 'confirm' => 1, 'authorize_uncertain_retry' => 1])->assertSessionHasNoErrors();
+        $new = PuzzleGeneration::latest('id')->first();
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()
+            ->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic-recovered', [], []));
+        app(PuzzleAutomation::class)->generate($new->id);
+        $this->assertSame('succeeded', $new->fresh()->status);
+        $this->post(route('admin.orders.groups.assignment.automation', $item->order), ['action' => 'resume'])->assertSessionHasNoErrors();
+        $next = OrderProcessRun::latest('id')->first();
+        $this->assertNotSame($run->id, $next->id);
+        app(ProcessRuntime::class)->advance($next->id);
+        $this->send($next);
+        $this->assertSame($new->id, OrderReviewManifest::sole()->images[0]['generation_id']);
+        $this->assertNull(OrderReviewManifest::sole()->approved_at);
+        $this->assertDatabaseCount('puzzle_generations', 2);
+        $this->assertDatabaseCount('order_attachments', 1);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        $this->assertSame('unknown', $previous->fresh()->billing_status);
+    }
+
     public function test_coloring_cover_can_regenerate_with_custom_prompt_without_reusing_old_approval(): void
     {
         [$item, $run] = $this->generatedPreview();
