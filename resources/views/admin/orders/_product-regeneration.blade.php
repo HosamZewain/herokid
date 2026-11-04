@@ -7,6 +7,7 @@
     && $generationActor->hasPermission('orders.production_prompt.manage'))
     <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm" data-product-regeneration="{{ $productPrompt['item']->id }}">
         <p>آخر محاولة لهذا المنتج: {{ $latestProductGeneration->attempt_number }} — {{ \App\Models\PuzzleGeneration::LABELS[$latestProductGeneration->status] ?? $latestProductGeneration->status }}</p>
+        @if($latestProductGeneration->photoWarning())<p class="mt-2 font-bold">{{ $latestProductGeneration->photoWarning() }}</p>@endif
         @if($latestProductGeneration->error_code)
             <p class="mt-2">{{ \App\Models\PuzzleGeneration::ERRORS[$latestProductGeneration->error_code] ?? 'تعذر إكمال المحاولة؛ راجع بيانات المنتج وحالة التنفيذ.' }}</p>
         @endif

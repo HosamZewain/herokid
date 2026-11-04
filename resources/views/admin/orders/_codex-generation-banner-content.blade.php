@@ -2,7 +2,22 @@
 <section class="mb-4 rounded-2xl border-2 border-indigo-200 bg-white p-5" aria-label="وضع الطلب في الأوتوميشن">
     <h3 class="mb-3 text-lg font-black">وضع الطلب في الأوتوميشن</h3>
     @include('admin.orders._automation-summary', ['group'=>['representative_id'=>$workspaceOrder->id,'automation_summary'=>$workspaceSummary]])
-
+    @if(($workspaceSummary['recheck'] ?? null) && app(\App\Services\Orders\OrderAccess::class)->controls($workspaceOrder, auth()->user())
+        && auth()->user()->hasPermission('orders.photos.view') && auth()->user()->hasPermission('orders.production_prompt.manage'))
+        <form class="mt-3" method="POST" action="{{ route('admin.orders.workspace.control', $workspaceOrder) }}">
+            @csrf
+            <input type="hidden" name="action" value="recheck">
+            <input type="hidden" name="version" value="{{ $workspaceSummary['control_version'] }}">
+            <input type="hidden" name="run_id" value="{{ $workspaceSummary['recheck']['run_id'] }}">
+            <input type="hidden" name="run_version" value="{{ $workspaceSummary['recheck']['version'] }}">
+            <p class="mb-2 text-sm">هذا المسار توقف قبل أي توليد. الفحص يوضح البيانات الناقصة؛ وإذا كانت سليمة يبدأ تجهيز المعاينة بالصور الصالحة لنفس الطفل.</p>
+            <button class="rounded-lg bg-indigo-700 px-4 py-2 font-bold text-white">فحص واستكمال تجهيز المعاينة</button>
+        </form>
+    @endif
+    @if($workspaceSummary['state'] === 'intervention')
+        @can('orders.update')<a class="mt-3 inline-block font-bold underline" href="{{ route('admin.orders.groups.edit', $workspaceOrder) }}">تصحيح بيانات الطلب والصور</a>@endcan
+        <p class="mt-2 text-xs text-gray-600">رقم المتابعة: {{ $workspaceOrder->id }}. تغيير حالة الطلب وحده لا يحل سبب التوقف.</p>
+    @endif
 </section>
 @endisset
 @if($generationRows->isNotEmpty())

@@ -1,5 +1,9 @@
 # HeroKid AWS deployment and agent handoff
 
+## 4 November 2026 — Auto Pilot execution preparation: base revalidated
+
+Owner requested production, confirmation/preview messaging, and an order-page audit trail. Before continuing the isolated implementation, GitHub main and AWS HEAD were both rechecked as **449cb0194cfaa772ba4ae7c855d7028aaebd9724**. Its guidance and untouched-preflight recovery changes are included in this feature branch. The older prepared-only heading below is historical documentation, not current host evidence. Auto Pilot execution preparation has NOT been deployed or activated. Preserve the live1000/day decision quota.
+
 ## 4 November 2026 — Auto Pilot1000/day APPLIED; current-memory evaluation PASSED
 
 Owner explicitly instructed “خلي الحد1000 عادي”. Permanent **1000 decisions/Cairo day**
@@ -33,6 +37,11 @@ bytes. Recovery **/home/ubuntu/herokid-before-autopilot-1000-20261104** holds pr
 private config/hash/mode evidence, usage receipt, anonymized report, services/log
 baselines. Preserve consumed quota/audit and later customer writes during recovery;
 never reset usage, replay queues, restore DB or replace newer unrelated config.
+
+## 4 November 2026 — actionable order guidance and preview preflight recovery PREPARED, NOT DEPLOYED
+
+Prepared in isolated checkout based on `6421694bdeb9df3734188a7eec5e4de9fbd4bdbc`; primary mobile/UI work preserved. [Staff behavior, boundaries and validation](order-self-service-guidance-2026-11-04.ar.md). General Arabic reasons/next actions, same-child valid-photo fallback with exclusion notice, and explicit versioned recovery for untouched product-preview preflight failures. No production changes, historical replay, customer message or provider call. PHP8.3 SQLite and MySQL8 each158tests/1672assertions pass; Pint/diff/lockfile build pass, manifest unchanged and old assets retained. No migration. Deploy only after authorization and fresh production/base verification, with scoped graceful affected-worker refresh; preserve active Codex. Existing deployed release below remains current.
+
 
 ## 4 November 2026 — explicit uncertain product recovery DEPLOYED
 

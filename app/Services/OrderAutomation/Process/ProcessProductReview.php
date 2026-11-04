@@ -2,6 +2,7 @@
 
 namespace App\Services\OrderAutomation\Process;
 
+use App\Exceptions\ProductPreviewInputException;
 use App\Models\OrderItem;
 use App\Models\OrderPreview;
 use App\Models\OrderPreviewStaffApproval;
@@ -34,13 +35,13 @@ class ProcessProductReview
     public function prepare(OrderProcessRun $run, OrderProcessStep $step, array $config): void
     {
         if (! config('product_review.enabled') || ! app(PuzzleAutomation::class)->enabled()) {
-            throw new RuntimeException('preview_requires_review');
+            throw new ProductPreviewInputException(null, 'preview_disabled');
         }
         $items = $this->items($run);
         $captured = $items->mapWithKeys(fn ($item) => [$item->id => $this->capture($item)]);
         $productCost = $captured->sum('estimate_usd');
         if ($productCost > (float) $config['budget_usd']) {
-            throw new RuntimeException('preview_requires_review');
+            throw new ProductPreviewInputException(null, 'preview_budget_exceeded');
         }
         $config['budget_usd'] -= $productCost;
         foreach ($items as $item) {
@@ -49,14 +50,17 @@ class ProcessProductReview
             $context = $captured[$item->id];
             $existing = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->lockForUpdate()->first();
             if ($existing) {
-                if (! hash_equals($context['fingerprint'], $existing->context['fingerprint'] ?? '') || ! in_array($existing->status, ['queued', 'processing', 'succeeded'], true)) {
-                    throw new RuntimeException('preview_requires_review');
+                if (! hash_equals($context['fingerprint'], $existing->context['fingerprint'] ?? '')) {
+                    throw new ProductPreviewInputException($item->id, 'preview_product_changed');
+                }
+                if (! in_array($existing->status, ['queued', 'processing', 'succeeded'], true)) {
+                    throw new ProductPreviewInputException($item->id, 'preview_product_result_review');
                 }
 
                 continue;
             }
             if ($item->order->attachments()->where(fn ($q) => $q->where('production_unit_key', $context['unit_key'])->orWhereNull('production_unit_key'))->exists()) {
-                throw new RuntimeException('preview_requires_review');
+                throw new ProductPreviewInputException($item->id, 'preview_existing_attachment');
             }
             PuzzleGeneration::create(['order_id' => $item->order_id, 'order_item_id' => $item->id, 'event_id' => $run->event_id,
                 'checkout_key' => $run->checkout_key, 'unit_key' => $context['unit_key'], 'context' => $context, 'status' => 'queued']);
@@ -88,18 +92,18 @@ class ProcessProductReview
             $generation = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first();
             if (! $generation || in_array($generation->status, ['queued', 'processing'], true)) {
                 if ($run->created_at->lt(now()->subHours(6))) {
-                    throw new RuntimeException('preview_requires_review');
+                    throw new ProductPreviewInputException($item->id, 'preview_worker_delayed');
                 }
 
                 return false;
             }
             if ($generation->status !== 'succeeded') {
-                throw new RuntimeException('preview_requires_review');
+                throw new ProductPreviewInputException($item->id, 'preview_product_result_review');
             }
             $context = $this->capture($item);
             if (! hash_equals($context['fingerprint'], $generation->context['fingerprint'] ?? '')) {
                 if (! hash_equals($context['fingerprint'], $staffInputs[(string) $item->id]['input_fingerprint'] ?? '')) {
-                    throw new RuntimeException('preview_requires_review');
+                    throw new ProductPreviewInputException($item->id, 'preview_product_changed');
                 }
                 // The approval attests to this saved artwork under the current brief;
                 // keep the original generation provenance in the immutable manifest.
@@ -107,7 +111,7 @@ class ProcessProductReview
             }
             $preview = OrderPreview::find($generation->preview_id);
             if (! $preview || $preview->order_id !== $item->order_id || $preview->production_unit_key !== $context['unit_key'] || $preview->checksum !== $generation->checksum || $preview->productGallery?->status !== 'active') {
-                throw new RuntimeException('preview_requires_review');
+                throw new ProductPreviewInputException($item->id, 'preview_image_unavailable');
             }
             $images[] = ['kind' => ($context['production_stage'] ?? 'product'), 'order_id' => $item->order_id, 'item_id' => $item->id,
                 'generation_id' => $generation->id, 'preview_id' => $preview->id, 'unit_key' => $context['unit_key'],
@@ -147,8 +151,9 @@ class ProcessProductReview
     {
         try {
             return app(PuzzleInputs::class)->captureCurrent($item);
-        } catch (\Throwable) {
-            throw new RuntimeException('preview_requires_review');
+        } catch (\Throwable $error) {
+            $code = array_key_exists($error->getMessage(), PuzzleGeneration::ERRORS) ? $error->getMessage() : 'preview_requires_review';
+            throw new ProductPreviewInputException($item->id, $code);
         }
     }
 

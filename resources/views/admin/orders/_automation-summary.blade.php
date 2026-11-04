@@ -5,11 +5,17 @@
 <div data-automation-summary="{{ $group['representative_id'] }}" data-state="{{ $summary['state'] }}" class="rounded-xl border p-3 text-xs {{ $tones[$summary['state']] }}">
     <p class="font-black">{{ $summary['state'] === 'intervention' ? '⚠' : ($summary['tracking'] ? '🤖' : '👤') }} {{ $summary['label'] }}</p>
     @if($summary['reason'])<p class="mt-1 break-words">{{ $summary['reason'] }}</p>@endif
+    @if($summary['next'] ?? null)<p class="mt-2 font-bold">{{ $summary['next'] }}</p>@endif
+    @if($summary['state'] === 'intervention' && !($summary['recheck'] ?? null) && isset($summary['destination']))
+        <a class="mt-2 inline-block font-bold underline" href="{{ route('admin.orders.groups.show', $group['representative_id']) }}#{{ $summary['destination']['anchor'] }}">{{ $summary['destination']['label'] }}</a>
+    @endif
     @if($summary['running'] && $summary['state'] === 'intervention')<p class="mt-1 font-bold text-blue-800">يوجد توليد جارٍ أيضًا؛ انتظر تأكيد الإيقاف قبل التعديل.</p>@endif
     <details class="mt-2" data-summary-details><summary class="cursor-pointer font-bold">تفاصيل المراحل ({{ count($summary['parts']) }})</summary>
         @foreach($summary['parts'] as $part)
             <div class="mt-2 border-t pt-2"><p>{{ $part['child'] }} — {{ $part['label'] }}</p>
                 @if($part['reason'])<p>{{ $part['reason'] }}</p>@endif
+                @if($part['next'] ?? null)<p class="font-bold">{{ $part['next'] }}</p>@endif
+                @if($part['state'] === 'intervention' && isset($part['destination']))<a class="font-bold underline" href="{{ route('admin.orders.groups.show', $group['representative_id']) }}#{{ $part['destination']['anchor'] }}">{{ $part['destination']['label'] }}</a>@endif
                 @if($part['total'])<progress class="mt-1 w-full" max="{{ $part['total'] }}" value="{{ $part['done'] }}" aria-label="{{ $part['label'] }}"></progress>@endif
             </div>
         @endforeach

@@ -2,6 +2,7 @@
 
 namespace App\Services\OrderAutomation\Process;
 
+use App\Exceptions\ProductPreviewInputException;
 use App\Jobs\AdvanceOrderProcess;
 use App\Jobs\RetryOrderProcessMessage;
 use App\Models\Order;
@@ -311,6 +312,10 @@ class ProcessRuntime
 
                     return null;
                 });
+            } catch (ProductPreviewInputException $exception) {
+                $run->refresh()->update(['status' => 'blocked', 'error_code' => $exception->reasonCode,
+                    'context' => array_merge($run->context, ['blocker' => ['item_id' => $exception->itemId,
+                        'code' => $exception->reasonCode, 'at' => now()->toIso8601String()]])]);
             } catch (ValidationException) {
                 $run->refresh()->update(['status' => 'blocked', 'error_code' => 'live_policy_changed']);
             } catch (RuntimeException $exception) {

@@ -47,6 +47,7 @@ use App\Services\OrderAutomation\Process\ProcessTemplates;
 use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\BookPromptSync;
+use App\Services\Orders\OrderAutomationGuidance;
 use App\Services\Orders\OrderAutomationSummary;
 use App\Services\Orders\ProductProductionPromptSyncService;
 use App\Services\Orders\StaffPreviewInputs;
@@ -152,6 +153,192 @@ class ProductReviewRuntimeTest extends TestCase
         }
 
         return $item;
+    }
+
+    private function blockedPhotoPreview(): array
+    {
+        $item = $this->book();
+        Storage::disk('s3_private')->put('child-photos/synthetic.heic', 'synthetic unsupported image');
+        $item->order->updateQuietly(['uploaded_photos' => ['child-photos/synthetic.heic']]);
+        DB::transaction(fn () => $item->order->update(['status' => 'new_confirmed']));
+        app(ProcessRuntime::class)->tick();
+        $run = OrderProcessRun::where('checkout_key', $item->order->checkoutGroupKey())->sole();
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('blocked', $run->fresh()->status);
+
+        return [$item, $run->fresh()];
+    }
+
+    private function recheckPayload(OrderProcessRun $run): array
+    {
+        return ['action' => 'recheck', 'version' => (int) (DB::table('order_automation_controls')->where('checkout_key', $run->checkout_key)->value('version') ?? 1),
+            'run_id' => $run->id, 'run_version' => $run->version];
+    }
+
+    public function test_unusable_photo_preflight_is_actionable_and_failed_recheck_has_no_effects(): void
+    {
+        [$item, $run] = $this->blockedPhotoPreview();
+        $this->assertSame('puzzle_no_usable_photos', $run->error_code);
+        $this->assertSame($item->id, $run->context['blocker']['item_id']);
+        $this->assertDatabaseCount('puzzle_generations', 0);
+        $this->assertDatabaseCount('order_process_steps', 0);
+        $summary = (new OrderAutomationSummary)->forKeys([$run->checkout_key])[$run->checkout_key];
+        $this->assertStringContainsString('JPG', $summary['reason']);
+        $this->assertStringContainsString((string) $item->id, $summary['label']);
+        $this->assertSame($run->id, $summary['recheck']['run_id']);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)->get(route('admin.orders.groups.show', $item->order))->assertOk()
+            ->assertSee('فحص واستكمال تجهيز المعاينة')->assertDontSee('preview_requires_review');
+        $this->post(route('admin.orders.workspace.control', $item->order), $this->recheckPayload($run))->assertSessionHasErrors('automation');
+        $this->assertSame('blocked', $run->fresh()->status);
+        $this->assertDatabaseCount('order_automation_holds', 0);
+        $this->assertDatabaseCount('puzzle_generations', 0);
+        $this->assertDatabaseCount('order_process_runs', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_preflight_recheck_uses_valid_child_photo_and_queues_once_without_reconfirming(): void
+    {
+        [$item, $run] = $this->blockedPhotoPreview();
+        // This is the old generic blocker seen by existing orders such as HK11-104.
+        $run->update(['error_code' => 'preview_requires_review']);
+        $item->order->updateQuietly(['uploaded_photos' => ['child-photos/synthetic.heic', 'child-photos/synthetic.png']]);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $payload = $this->recheckPayload($run);
+        $url = route('admin.orders.workspace.control', $item->order);
+        $this->actingAs($admin)->post($url, $payload)->assertSessionHasNoErrors();
+        $this->assertSame('cancelled', $run->fresh()->status);
+        $new = OrderProcessRun::latest('id')->first();
+        $this->assertSame('queued', $new->status);
+        $this->assertSame($run->id, $new->context['supersedes_run_id']);
+        $this->assertDatabaseCount('puzzle_generations', 0);
+        $this->assertDatabaseCount('order_automation_holds', 0);
+        $this->post($url, $payload)->assertStatus(409);
+        $this->assertDatabaseCount('order_process_runs', 2);
+        $this->assertSame($admin->id, AdminActivityLog::where('action', 'order.preview_preflight_rechecked')->sole()->user_id);
+        app(ProcessRuntime::class)->advance($new->id);
+        $generation = PuzzleGeneration::sole();
+        $this->assertSame('queued', $generation->status);
+        $this->assertSame('child-photos/synthetic.png', $generation->context['photos'][0]['path']);
+        $this->assertSame([1], array_column($generation->context['excluded_photos'], 'number'));
+        $this->assertStringContainsString('1 صورة صالحة', $generation->photoWarning());
+        $this->assertSame(['child-photos/synthetic.heic', 'child-photos/synthetic.png'], $item->order->fresh()->uploaded_photos);
+        Http::assertNothingSent();
+    }
+
+    public function test_preflight_recheck_explains_disabled_budget_and_saved_attachment_without_claiming_success(): void
+    {
+        [$item, $run] = $this->blockedPhotoPreview();
+        $item->order->updateQuietly(['uploaded_photos' => ['child-photos/synthetic.png']]);
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+        $url = route('admin.orders.workspace.control', $item->order);
+        $payload = $this->recheckPayload($run);
+        config(['product_review.enabled' => false]);
+        $this->post($url, $payload)->assertSessionHasErrors(['automation' => OrderAutomationGuidance::reason('preview_disabled')]);
+        config(['product_review.enabled' => true]);
+        $definition = $run->revision->definition;
+        $low = $definition;
+        $low['nodes'][0]['config']['budget_usd'] = 0;
+        $run->revision->update(['definition' => $low]);
+        $this->post($url, $payload)->assertSessionHasErrors(['automation' => OrderAutomationGuidance::reason('preview_budget_exceeded')]);
+        $run->revision->update(['definition' => $definition]);
+        OrderAttachment::create(['order_id' => $item->order_id, 'path' => 'retained.png', 'disk' => 's3_private', 'original_name' => 'retained.png', 'mime_type' => 'image/png', 'size' => 1]);
+        $this->post($url, $payload)->assertSessionHasErrors('automation');
+        $this->assertSame('blocked', $run->fresh()->status);
+        $this->assertDatabaseCount('puzzle_generations', 0);
+        $this->assertDatabaseCount('order_process_runs', 1);
+        $this->assertDatabaseCount('order_automation_holds', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_explicit_preflight_recheck_after_safe_pause_keeps_assignment_and_starts_once(): void
+    {
+        [$item, $run] = $this->blockedPhotoPreview();
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin);
+        $url = route('admin.orders.workspace.control', $item->order);
+        $this->post($url, ['action' => 'pause', 'version' => 1, 'reason' => 'Correct photos'])->assertSessionHasNoErrors();
+        $this->assertSame('paused', $run->fresh()->status);
+        $item->order->updateQuietly(['uploaded_photos' => ['child-photos/synthetic.png']]);
+        $this->post($url, $this->recheckPayload($run->fresh()))->assertSessionHasNoErrors();
+        $this->assertSame('cancelled', $run->fresh()->status);
+        $this->assertSame('running', DB::table('order_automation_controls')->value('state'));
+        $this->assertDatabaseCount('order_group_assignments', 0);
+        $this->assertDatabaseCount('order_process_runs', 2);
+        $this->assertDatabaseCount('puzzle_generations', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_valid_photo_fallback_reaches_cover_provider_and_interior_references_without_heic(): void
+    {
+        $item = $this->book();
+        Storage::disk('s3_private')->put('child-photos/synthetic.heic', 'synthetic unsupported image');
+        $item->order->updateQuietly(['uploaded_photos' => ['child-photos/synthetic.heic', 'child-photos/synthetic.png']]);
+        $run = $this->enroll($item->order);
+        $generation = PuzzleGeneration::sole();
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->withArgs(function (GptImageRequest $request) {
+            $this->assertSame('data:image/png;base64,'.base64_encode($this->png), $request->inputImages[0]);
+            $this->assertStringNotContainsString(base64_encode('synthetic unsupported image'), implode('', $request->inputImages));
+
+            return true;
+        })->andReturn(new GptImageResult($this->png(2), 'png', 'image/png', 'synthetic-receipt', [], []));
+        app(PuzzleAutomation::class)->generate($generation->id);
+        $this->assertSame('succeeded', $generation->fresh()->status);
+        $references = app(BookReferences::class)->capture($item, $generation->context['photos'], 3)['references'];
+        $this->assertCount(1, $references);
+        $this->assertSame('child-photos/synthetic.png', $references[0]['path']);
+        Storage::disk('s3_private')->assertExists('child-photos/synthetic.heic');
+        $summary = (new OrderAutomationSummary)->forKeys([$run->checkout_key])[$run->checkout_key];
+        $this->assertStringContainsString('تجهيز معاينات المنتجات', $summary['label']);
+        $cover = collect($summary['parts'])->firstWhere('stage', 'book_cover');
+        $this->assertStringContainsString('استُبعدت الصور رقم 1', $cover['reason']);
+        Http::assertNothingSent();
+    }
+
+    public function test_preflight_recheck_respects_scope_versions_and_existing_generation(): void
+    {
+        [$item, $run] = $this->blockedPhotoPreview();
+        $item->order->updateQuietly(['uploaded_photos' => ['child-photos/synthetic.png']]);
+        $url = route('admin.orders.workspace.control', $item->order);
+        $payload = $this->recheckPayload($run);
+        $this->actingAs($this->actor)->post($url, $payload)->assertForbidden();
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)->post($url, array_replace($payload, ['run_version' => $run->version + 1]))->assertStatus(409);
+        $another = $this->book();
+        $this->post(route('admin.orders.workspace.control', $another->order), $payload)->assertNotFound();
+        PuzzleGeneration::create(['order_id' => $item->order_id, 'order_item_id' => $item->id, 'checkout_key' => $run->checkout_key,
+            'unit_key' => 'product:'.$item->id, 'event_id' => $run->event_id, 'status' => 'uncertain', 'context' => [], 'billing_status' => 'unknown']);
+        $this->post($url, $payload)->assertStatus(409);
+        $this->assertNull((new OrderAutomationSummary)->forKeys([$run->checkout_key])[$run->checkout_key]['recheck']);
+        $this->assertDatabaseCount('order_process_runs', 1);
+        $this->assertDatabaseCount('order_automation_holds', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_photo_fallback_never_borrows_sibling_photos_and_valid_inputs_are_stable(): void
+    {
+        $one = $this->book();
+        $two = $this->book();
+        $two->order->updateQuietly(['checkout_group_key' => $one->order->checkoutGroupKey(), 'child_name' => 'Other child', 'uploaded_photos' => ['child-photos/other.png']]);
+        Storage::disk('s3_private')->put('child-photos/other.png', $this->png(3));
+        $one->order->updateQuietly(['status' => 'new_confirmed']);
+        $two->order->updateQuietly(['status' => 'new_confirmed']);
+        $capture = app(PuzzleInputs::class);
+        $before = $capture->captureCurrent($one);
+        $this->assertArrayNotHasKey('excluded_photos', $before);
+        Storage::disk('s3_private')->put('child-photos/synthetic.heic', 'unsupported');
+        $one->order->updateQuietly(['uploaded_photos' => ['child-photos/synthetic.heic', 'child-photos/synthetic.png']]);
+        $first = $capture->captureCurrent($one->fresh());
+        $second = $capture->captureCurrent($two->fresh());
+        $this->assertSame(['child-photos/synthetic.png'], array_column($first['photos'], 'path'));
+        $this->assertSame(['child-photos/other.png'], array_column($second['photos'], 'path'));
+        $this->assertNotSame($first['fingerprint'], $second['fingerprint']);
+        $one->order->updateQuietly(['uploaded_photos' => ['child-photos/synthetic.png']]);
+        $this->assertSame($before['fingerprint'], $capture->captureCurrent($one->fresh())['fingerprint']);
+        $one->order->updateQuietly(['uploaded_photos' => ['child-photos/synthetic.heic']]);
+        $this->expectExceptionMessage('puzzle_no_usable_photos');
+        $capture->captureCurrent($one->fresh());
     }
 
     private function enroll(Order $order): OrderProcessRun
