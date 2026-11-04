@@ -93,6 +93,37 @@ class PuzzleAutomation
         return $hold ? hash('sha256', json_encode([$hold->user_id, $hold->created_at, $hold->fingerprint])) : null;
     }
 
+    /** First admission only. The existing worker performs generation and its final guards. */
+    public function admitForAutoPilot(OrderItem $item, string $unitKey, \Closure $admissionGuard): PuzzleGeneration
+    {
+        return DB::transaction(function () use ($item, $unitKey, $admissionGuard) {
+            $key = $item->order->checkoutGroupKey();
+            $rows = Order::where('checkout_group_key', $key)->orderBy('id')->lockForUpdate()->get();
+            $item = OrderItem::where('order_id', $item->order_id)->lockForUpdate()->findOrFail($item->id);
+            $order = $rows->firstWhere('id', $item->order_id);
+            $admissionGuard();
+            if (! $this->enabled() || ! $order || ! AutomationControl::admits($key) || AutomationHandoff::held($key)
+                || app(AutomationAssignment::class)->owns($order)
+                || PuzzleGeneration::where('order_item_id', $item->id)->exists()
+                || ! in_array($order->status, ['new_confirmed', 'costomer_confirmed'], true)
+                || ! in_array($order->printing_status, [null, 'not_started', 'not_required'], true)
+                || ! in_array($order->shipping_status, [null, 'not_ready', 'not_required'], true)) {
+                throw new RuntimeException('autopilot_existing_work_or_stage');
+            }
+            $context = app(PuzzleInputs::class)->capture($item);
+            if ($context['unit_key'] !== $unitKey) {
+                throw new RuntimeException('autopilot_unit_mismatch');
+            }
+            $candidate = new PuzzleGeneration(['order_id' => $order->id, 'unit_key' => $unitKey]);
+            $this->assertNoOutput($candidate);
+            $event = OrderProcessEvent::create(['checkout_key' => $key, 'order_id' => $order->id,
+                'type' => 'autopilot_production_admitted', 'data' => ['unit_key' => $unitKey]]);
+
+            return PuzzleGeneration::create(['order_id' => $order->id, 'order_item_id' => $item->id,
+                'event_id' => $event->id, 'checkout_key' => $key, 'unit_key' => $unitKey, 'context' => $context, 'status' => 'queued']);
+        });
+    }
+
     private function outputBaseline(int $orderId, string $unit): string
     {
         $attachments = OrderAttachment::where('order_id', $orderId)->where(fn ($q) => $q->where('production_unit_key', $unit)->orWhereNull('production_unit_key'))

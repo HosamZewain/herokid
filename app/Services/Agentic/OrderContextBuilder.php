@@ -163,6 +163,11 @@ class OrderContextBuilder
             }
         }
         $context['memory'] = app(MemoryService::class)->forContext($key, $context);
+        $execution = app(ProductionExecutionSettings::class);
+        if (($settings = $execution->approved()) && $execution->includes($settings, $context['representative_id'])) {
+            // Activation must cause a NEW decision; old Shadow proposals never replay.
+            $context['execution_activation'] = $settings['activation_id'];
+        }
         $context['fingerprint'] = ContextFingerprint::hash($context);
         $context['observed_at'] = now()->toISOString();
 

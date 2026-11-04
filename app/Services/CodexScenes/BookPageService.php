@@ -166,17 +166,18 @@ class BookPageService
         return null;
     }
 
-    public function start(OrderItem $item, OrderReviewManifest $manifest, bool $explicit = false): CodexSceneRun
+    public function start(OrderItem $item, OrderReviewManifest $manifest, bool $explicit = false, ?\Closure $admissionGuard = null): CodexSceneRun
     {
         if (! config('product_review.enabled') || ! config('product_review.book_pages_enabled') || ! $this->workerReady()) {
             throw new RuntimeException('Book production disabled');
         }
 
-        return Cache::lock('codex-scenes-start', 30)->block(3, function () use ($item, $manifest, $explicit) {
-            return DB::transaction(function () use ($item, $manifest, $explicit) {
+        return Cache::lock('codex-scenes-start', 30)->block(3, function () use ($item, $manifest, $explicit, $admissionGuard) {
+            return DB::transaction(function () use ($item, $manifest, $explicit, $admissionGuard) {
                 $rows = Order::where('checkout_group_key', $item->order->checkoutGroupKey())->orderBy('id')->lockForUpdate()->get();
                 $order = $rows->firstWhere('id', $item->order_id);
                 $item = OrderItem::lockForUpdate()->findOrFail($item->id);
+                $admissionGuard?->__invoke();
                 if (! AutomationControl::admits($item->order->checkoutGroupKey())) {
                     throw new RuntimeException('Automation paused');
                 }

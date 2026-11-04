@@ -67,12 +67,13 @@ class ManualSceneService
         return hash('sha256', json_encode([$order->only(['story_id', 'child_name', 'child_age', 'child_gender', 'interests', 'lesson', 'gift_note', 'uploaded_photos', 'child_identity_approved_attempt_id']), $order->childIdentityApprovedAttempt?->output_checksum, $order->story?->updated_at?->toISOString(), $order->productionPromptOverride?->updated_at?->toISOString(), app(OrderSceneTextService::class)->present($order)['scenes']], JSON_UNESCAPED_UNICODE));
     }
 
-    public function start(Order $order, ?User $user = null): CodexSceneRun
+    public function start(Order $order, ?User $user = null, ?\Closure $admissionGuard = null): CodexSceneRun
     {
-        return Cache::lock('codex-scenes-start', 30)->block(3, function () use ($order, $user) {
-            return DB::transaction(function () use ($order, $user) {
+        return Cache::lock('codex-scenes-start', 30)->block(3, function () use ($order, $user, $admissionGuard) {
+            return DB::transaction(function () use ($order, $user, $admissionGuard) {
                 $rows = Order::where('checkout_group_key', $order->checkoutGroupKey())->orderBy('id')->lockForUpdate()->get();
                 $order = $rows->firstWhere('id', $order->id);
+                $admissionGuard?->__invoke();
                 if ($order && ! AutomationControl::admits($order->checkoutGroupKey())) {
                     throw ValidationException::withMessages(['automation' => 'الأوتوميشن متوقف؛ استأنفه بعد مراجعة البيانات.']);
                 }

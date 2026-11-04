@@ -3,7 +3,7 @@
 return [
     'name' => 'HeroKid Auto Pilot',
     'memory_limit' => 30,
-    // These switches enable observation/evaluation only. There is no execute mode.
+    // Observation and decision evaluation retain their Shadow semantics.
     'observe' => (bool) env('AGENTIC_OBSERVE', false),
     'evaluate' => (bool) env('AGENTIC_EVALUATE', false),
     'provider' => env('AGENTIC_PROVIDER', 'codex'),
@@ -15,4 +15,17 @@ return [
     'max_context_bytes' => 196608,
     'bridge_socket' => env('AGENTIC_BRIDGE_SOCKET', '/run/herokid-agentic/decision.sock'),
     'mcp_enabled' => (bool) env('AGENTIC_MCP_ENABLED', false),
+    // A separately approved production release must supply every admission bound.
+    // These are production starts, NOT Codex decisions or paid-provider retries.
+    'execution' => [
+        'enabled' => (bool) env('AUTOPILOT_EXECUTION_ENABLED', false),
+        'activation_id' => env('AUTOPILOT_EXECUTION_ACTIVATION'),
+        'activated_at' => env('AUTOPILOT_EXECUTION_ACTIVATED_AT'),
+        'actions' => array_values(array_filter(explode(',', (string) env('AUTOPILOT_EXECUTION_ACTIONS', '')))),
+        'order_ids' => array_values(array_filter(explode(',', (string) env('AUTOPILOT_EXECUTION_ORDER_IDS', '')))),
+        'all_checkouts' => (bool) env('AUTOPILOT_EXECUTION_ALL_CHECKOUTS', false),
+        'daily_limit' => (int) env('AUTOPILOT_EXECUTION_DAILY_LIMIT', 0),
+        'batch_size' => 3,
+        'decision_max_age_seconds' => 900,
+    ],
 ];
