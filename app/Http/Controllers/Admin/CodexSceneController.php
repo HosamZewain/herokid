@@ -9,6 +9,7 @@ use App\Services\CodexScenes\ManualSceneService;
 use App\Services\CodexScenes\OrderGenerationBanner;
 use App\Services\CodexScenes\SceneTiming;
 use App\Services\Orders\OrderAccess;
+use App\Services\Orders\PrivateOrderThumbnail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -124,6 +125,10 @@ class CodexSceneController extends Controller
         abort_unless($run->order_id === $order->id, 404);
         $data = ($run->scenes ?? [])[(string) $scene] ?? null;
         abort_unless($data, 404);
+
+        if (request()->boolean('thumbnail')) {
+            return app(PrivateOrderThumbnail::class)->response('s3_private', $data['path']);
+        }
 
         return Storage::disk('s3_private')->response($data['path'], 'scene-'.sprintf('%02d', $scene).'.png', ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
     }

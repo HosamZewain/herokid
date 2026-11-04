@@ -147,6 +147,11 @@ class OrderProcessIdentityTest extends TestCase
         $this->get(route('admin.orders.groups.show', $order))->assertOk()->assertSee('غير معتمدة')
             ->assertSee(route('admin.orders.identity-attempts.image', [$order, $attempt]), false);
         $this->get(route('admin.orders.identity-attempts.image', [$order, $attempt]))->assertOk()->assertStreamedContent($this->png);
+        $thumbnailUrl = route('admin.orders.identity-attempts.image', [$order, $attempt, 'thumbnail' => 1]);
+        $thumbnail = $this->get($thumbnailUrl)->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+        $size = getimagesize($thumbnail->baseResponse->getFile()->getPathname());
+        $this->assertLessThanOrEqual(400, max($size[0], $size[1]));
+        $this->withHeader('If-None-Match', $thumbnail->headers->get('ETag'))->get($thumbnailUrl)->assertStatus(304);
         $attachment->delete();
         $this->assertTrue(Storage::disk($attempt->output_disk)->exists($attempt->output_storage_path));
     }

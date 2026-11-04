@@ -43,7 +43,8 @@ class OrderAutomationSummary
 
     private function load(Collection $keys): void
     {
-        $orders = Order::withTrashed()->whereIn('checkout_group_key', $keys)->get(['id', 'checkout_group_key', 'status', 'payment_status', 'child_name', 'updated_at', 'paid_amount_cents', 'printing_status', 'shipping_status', 'story_id'])->groupBy('checkout_group_key');
+        // Scalar projection only: counters must not hydrate every historical order model.
+        $orders = Order::withTrashed()->whereIn('checkout_group_key', $keys)->toBase()->get(['id', 'checkout_group_key', 'status', 'payment_status', 'child_name', 'updated_at', 'paid_amount_cents', 'printing_status', 'shipping_status', 'story_id'])->groupBy('checkout_group_key');
         $controls = DB::table('order_automation_controls')->whereIn('checkout_key', $keys)->get()->keyBy('checkout_key');
         $owned = DB::query()->fromSub(app(AutomationAssignment::class)->keys(), 'owned')->whereIn('checkout_key', $keys)->pluck('checkout_key');
         $holds = DB::table('order_automation_holds')->whereIn('checkout_key', $keys)->pluck('checkout_key');

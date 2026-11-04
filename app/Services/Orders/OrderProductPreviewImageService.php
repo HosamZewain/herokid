@@ -5,6 +5,7 @@ namespace App\Services\Orders;
 use App\Models\OrderPreview;
 use App\Services\Storage\MediaStorage;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Imagick;
 use ImagickDraw;
 use ImagickException;
@@ -46,7 +47,7 @@ class OrderProductPreviewImageService
         $directory = trim(dirname($preview->file_path), '.');
         $fingerprint = substr(hash('sha256', implode('|', [
             $preview->checksum ?: $preview->file_path,
-            'mandatory-watermark-v2',
+            'mandatory-watermark-v3',
             (string) config('order_product_previews.watermark_version', 1),
             (string) config('order_product_previews.watermark_text', 'HeroKid Preview'),
             (string) config('order_product_previews.customer_max_width', 1400),
@@ -61,8 +62,32 @@ class OrderProductPreviewImageService
 
     private function createProtectedImage(string $sourcePath, string $protectedPath, string $disk): void
     {
-        $blob = $this->protectedBytes(file_get_contents($sourcePath));
+        $blob = $this->cachedProtectedBytes(file_get_contents($sourcePath));
         abort_unless(Storage::disk($disk)->put($protectedPath, $blob, ['visibility' => 'private']), 500);
+    }
+
+    /** Cache only a derived, watermarked JPEG; original bytes are verified by the caller on every read. */
+    public function cachedProtectedBytes(string $bytes): string
+    {
+        $fingerprint = hash('sha256', hash('sha256', $bytes).'|mandatory-watermark-v3|'.json_encode(config('order_product_previews'), JSON_THROW_ON_ERROR));
+        // Reuse the existing seven-day private derived-thumbnail retention, never customer originals.
+        $disk = $this->mediaStorage->processingDisk();
+        $path = 'order-thumbnails/protected/'.$fingerprint.'.jpg';
+        if ($disk->exists($path)) {
+            return $disk->get($path);
+        }
+
+        $protected = $this->protectedBytes($bytes);
+        $temporary = $path.'.'.Str::uuid().'.tmp';
+        try {
+            if ($disk->put($temporary, $protected, ['visibility' => 'private'])) {
+                $disk->move($temporary, $path);
+            }
+        } finally {
+            $disk->delete($temporary);
+        }
+
+        return $protected;
     }
 
     /** Always render a derivative; callers must never fall back to the original on failure. */
@@ -121,10 +146,28 @@ class OrderProductPreviewImageService
         $draw->setFontWeight(700);
         $draw->setTextAlignment(Imagick::ALIGN_CENTER);
 
-        for ($y = -$height; $y <= $height * 2; $y += $verticalStep) {
-            for ($x = -$width; $x <= $width * 2; $x += $horizontalStep) {
-                $image->annotateImage($draw, $x, $y, -28, $text);
+        // Draw a small seamless tile once. Annotating the full image repeatedly was
+        // rerasterizing hundreds of text runs, including many outside the image.
+        $tile = new Imagick;
+        $canvas = new Imagick;
+        $texture = null;
+        try {
+            $tile->newImage($horizontalStep * 3, $verticalStep * 3, new ImagickPixel('transparent'), 'png');
+            for ($y = 0; $y < 3; $y++) {
+                for ($x = 0; $x < 3; $x++) {
+                    $tile->annotateImage($draw, ($x + 0.5) * $horizontalStep, ($y + 0.5) * $verticalStep, -28, $text);
+                }
             }
+            $tile->cropImage($horizontalStep, $verticalStep, $horizontalStep, $verticalStep);
+            $tile->setImagePage(0, 0, 0, 0);
+            $canvas->newImage($width, $height, new ImagickPixel('transparent'), 'png');
+            $texture = $canvas->textureImage($tile);
+            $image->compositeImage($texture, Imagick::COMPOSITE_OVER, 0, 0);
+        } finally {
+            $texture?->clear();
+            $canvas->clear();
+            $tile->clear();
+            $draw->clear();
         }
     }
 }

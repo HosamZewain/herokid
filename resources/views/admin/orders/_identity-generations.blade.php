@@ -20,7 +20,7 @@
                         <p class="mt-1 text-sm font-black {{ $order->child_identity_approved_attempt_id === $identityAttempt->id ? 'text-emerald-700' : 'text-amber-700' }}">{{ $order->child_identity_approved_attempt_id === $identityAttempt->id ? 'معتمدة' : 'غير معتمدة' }}</p>
                         @if($identityAttempt->output_storage_path)
                             <a href="{{ route('admin.orders.identity-attempts.image', [$order, $identityAttempt]) }}" target="_blank" rel="noopener">
-                                <img src="{{ route('admin.orders.identity-attempts.image', [$order, $identityAttempt]) }}" alt="هوية {{ $order->child_name }} — المحاولة {{ $identityAttempt->attempt_number }}" loading="lazy" class="mt-2 h-40 w-full rounded-lg bg-gray-50 object-contain">
+                                <img src="{{ route('admin.orders.identity-attempts.image', [$order, $identityAttempt, 'thumbnail' => 1]) }}" alt="هوية {{ $order->child_name }} — المحاولة {{ $identityAttempt->attempt_number }}" loading="lazy" class="mt-2 h-40 w-full rounded-lg bg-gray-50 object-contain">
                                 <span class="text-sm font-bold text-violet-700">فتح صورة الهوية</span>
                             </a>
                         @endif

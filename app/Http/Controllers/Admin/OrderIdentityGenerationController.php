@@ -11,6 +11,7 @@ use App\Services\ChildIdentity\ChildIdentityApprovalService;
 use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\OrderIdentityRegenerationService;
 use App\Services\Orders\PreviewRegenerationGuard;
+use App\Services\Orders\PrivateOrderThumbnail;
 use App\Support\AdminActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,10 @@ class OrderIdentityGenerationController extends Controller
     public function image(Order $order, ChildIdentityGenerationAttempt $attempt)
     {
         abort_unless($order->child_identity_request_id === $attempt->child_identity_request_id && $attempt->output_disk && $attempt->output_storage_path, 404);
+
+        if (request()->boolean('thumbnail')) {
+            return app(PrivateOrderThumbnail::class)->response($attempt->output_disk, $attempt->output_storage_path);
+        }
 
         return Storage::disk($attempt->output_disk)->response($attempt->output_storage_path, 'identity-attempt-'.$attempt->attempt_number, [
             'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff',

@@ -146,6 +146,23 @@ class UploadPerformanceRegressionTest extends TestCase
         $this->actingAs(User::factory()->create())->get($url)->assertForbidden();
     }
 
+    public function test_protected_derivative_cache_is_bound_to_source_and_watermark_settings(): void
+    {
+        Storage::fake('local');
+        $source = UploadedFile::fake()->image('synthetic.png', 700, 900)->get();
+        $service = app(OrderProductPreviewImageService::class);
+        $first = $service->cachedProtectedBytes($source);
+        $this->assertSame($first, $service->cachedProtectedBytes($source));
+        $this->assertNotSame($source, $first);
+        $this->assertSame('image/jpeg', getimagesizefromstring($first)['mime']);
+        $this->assertCount(1, Storage::disk('local')->allFiles('order-thumbnails/protected'));
+        config(['order_product_previews.watermark_text' => 'Protected test artwork']);
+        $this->assertNotSame($first, $service->cachedProtectedBytes($source));
+        $this->assertCount(2, Storage::disk('local')->allFiles('order-thumbnails/protected'));
+        $service->cachedProtectedBytes(UploadedFile::fake()->image('different.png', 900, 700)->get());
+        $this->assertCount(3, Storage::disk('local')->allFiles('order-thumbnails/protected'));
+    }
+
     public function test_thumbnail_cleanup_removes_only_old_derived_files(): void
     {
         Storage::fake('local');

@@ -32,7 +32,7 @@ class PrivateOrderThumbnail
 
         $fingerprint = hash('sha256', $diskName.'|'.$source.'|'.$sourceDisk->lastModified($source).'|'.$sourceDisk->size($source));
         $cacheDisk = $this->mediaStorage->processingDisk();
-        $path = $this->path($diskName, $source);
+        $path = 'order-thumbnails/'.substr($fingerprint, 0, 2).'/'.$fingerprint.'.jpg';
         if (! $cacheDisk->exists($path)) {
             try {
                 $this->mediaStorage->withLocalCopy($diskName, $source, function (string $localSource) use ($cacheDisk, $path): void {

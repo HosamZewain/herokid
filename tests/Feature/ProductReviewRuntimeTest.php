@@ -1630,6 +1630,11 @@ class ProductReviewRuntimeTest extends TestCase
                 $this->assertSame(app(OrderProductPreviewImageService::class)->protectedBytes(app(ProcessProductReview::class)->bytes($original)), $image->getContent());
             }
         }
+        $this->assertCount(1, Storage::disk('local')->allFiles('order-thumbnails/protected'));
+        // A warm derivative never bypasses original checksum or manifest availability.
+        Storage::disk($original['disk'])->put($original['path'], 'changed-original');
+        $this->get($url)->assertNotFound();
+        Storage::disk($original['disk'])->put($original['path'], $this->png);
         $this->assertNull($manifest->fresh()->approved_at);
         $manifest->update(['images' => $snapshot]);
         // Editing the order does not relabel or replace artwork in an already sent snapshot.

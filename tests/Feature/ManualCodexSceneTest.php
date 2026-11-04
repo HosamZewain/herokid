@@ -912,8 +912,15 @@ class ManualCodexSceneTest extends TestCase
         $this->sceneOutput($run, 1);
         app(ManualSceneService::class)->collect($run);
         $this->actingAs($this->actor)->get(route('admin.orders.codex-scenes.image', [$this->order, $run, 1]))->assertOk();
+        $url = route('admin.orders.codex-scenes.image', [$this->order, $run, 1, 'thumbnail' => 1]);
+        $thumbnail = $this->get($url)->assertOk()->assertHeader('Content-Type', 'image/jpeg');
+        $size = getimagesize($thumbnail->baseResponse->getFile()->getPathname());
+        $this->assertLessThanOrEqual(400, max($size[0], $size[1]));
+        $this->withHeader('If-None-Match', $thumbnail->headers->get('ETag'))->get($url)->assertStatus(304);
         $other = Order::create(['order_number' => 'SYNTHETIC-2', 'parent_name' => 'Synthetic']);
         $this->get(route('admin.orders.codex-scenes.image', [$other, $run, 1]))->assertNotFound();
+        $this->get(route('admin.orders.codex-scenes.image', [$other, $run, 1, 'thumbnail' => 1]))->assertNotFound();
+        $this->actingAs(User::factory()->create())->get($url)->assertForbidden();
     }
 
     public function test_authentication_failure_disables_start_and_private_images_require_permission(): void

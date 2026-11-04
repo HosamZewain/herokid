@@ -89,7 +89,7 @@ class SecurityAndCacheHeaders
 
     private function isPrivateCachedAdminAssetRoute(Request $request): bool
     {
-        if ($request->routeIs('admin.orders.photo') && $request->boolean('thumbnail')) {
+        if ($request->routeIs(['admin.orders.photo', 'admin.orders.identity-attempts.image', 'admin.orders.codex-scenes.image']) && $request->boolean('thumbnail')) {
             return true;
         }
 

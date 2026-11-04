@@ -1,5 +1,14 @@
 # HeroKid AWS deployment and agent handoff
 
+## 5 November 2026 — preview media latency correction PREPARED
+
+Owner reports severe remaining admin/detail/customer-preview slowness and explicitly authorized the ongoing fix/publication. Revalidated AWS/GitHub base **b4de4e60018535e61827e90e16143b48e2c81590**. Isolated branch codex/preview-media-latency-20261104 preserves primary mobile/UI work. [Evidence, implementation and tests](preview-media-latency-2026-11-05.ar.md).
+
+Exact supplied manifest60: HTML TTFB0.368s, browser first image49.9s/load50.2s. Read-only same-source profile: S3+SHA271ms, watermark7913ms; candidate watermark1175ms. Small repeated watermark tile and private content/settings-bound derivative reuse preserve original checksum validation on every manifest GET and all link/gallery/order restrictions. Existing seven-day thumbnail retention covers local derivatives; originals, media history and public no-store remain. Admin identity/scene cards request400px private revalidated thumbnails; original links and authorization unchanged. Scalar order projections avoid hydrating all historical order models for counters, fixing a confirmed baseline performance regression without weakening its test.
+
+PHP8.3 SQLite and isolated MySQL8.4 each **238 tests /2782 assertions** pass; Pint/diff/lockfile build pass, manifest/assets unchanged with all historical assets retained. No schema/routes/config/environment/infrastructure change, customer POST, historical activation, paid generation or queue replay. Planned application/templates-only publication requires Blade cache and graceful FPM reload only; no background-worker restart. Prepared, not yet claimed deployed; exact SHA, recovery and live checks follow after publication.
+
+
 ## 4 November 2026 — site latency, lean polling and bounded web capacity DEPLOYED
 
 Application **b654311c62b987e06af57bbfc67cedf313cf0b81**, base **1a82850a0edf94b6bb8d66de3746255ac958e49c**, published from main under the owner's instruction to solve site-wide slowness. Deployment **21:31:11UTC /23:31:11Cairo**, isolated branch codex/site-latency-20261104; unrelated primary mobile/UI work preserved. [Evidence, implementation and limits](site-latency-2026-11-04.ar.md).

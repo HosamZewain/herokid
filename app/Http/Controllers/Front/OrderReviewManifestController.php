@@ -52,6 +52,6 @@ class OrderReviewManifestController extends Controller
         $size = @getimagesizefromstring($bytes);
         abort_unless($size && in_array($size['mime'], ['image/png', 'image/jpeg', 'image/webp']), 404);
 
-        return response($protection->protectedBytes($bytes))->header('Cross-Origin-Resource-Policy', 'same-origin')->header('Content-Type', 'image/jpeg')->header('Cache-Control', 'private, no-store')->header('X-Content-Type-Options', 'nosniff')->header('X-Robots-Tag', 'noindex, nofollow');
+        return response($protection->cachedProtectedBytes($bytes))->header('Cross-Origin-Resource-Policy', 'same-origin')->header('Content-Type', 'image/jpeg')->header('Cache-Control', 'private, no-store')->header('X-Content-Type-Options', 'nosniff')->header('X-Robots-Tag', 'noindex, nofollow');
     }
 }

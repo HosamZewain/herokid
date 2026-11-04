@@ -24,7 +24,7 @@
             <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 @foreach($codexRun->scenes ?? [] as $sceneNumber=>$sceneData)
                     <a href="{{ route('admin.orders.codex-scenes.image',[$order,$codexRun,$sceneNumber]) }}" target="_blank" rel="noopener" class="rounded-lg border p-2">
-                        <img src="{{ route('admin.orders.codex-scenes.image',[$order,$codexRun,$sceneNumber]) }}" alt="مشهد {{ $sceneNumber }} — {{ $order->child_name }}" class="w-full rounded-lg" loading="lazy">
+                        <img src="{{ route('admin.orders.codex-scenes.image',[$order,$codexRun,$sceneNumber, 'thumbnail' => 1]) }}" alt="مشهد {{ $sceneNumber }} — {{ $order->child_name }}" class="w-full rounded-lg" loading="lazy">
                         <span class="text-xs font-bold">مشهد {{ $sceneNumber }} · {{ $sceneData['width'] }} × {{ $sceneData['height'] }}</span>
                     </a>
                 @endforeach
