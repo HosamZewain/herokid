@@ -29,7 +29,7 @@ class OrchestratorTest(unittest.TestCase):
         self.assertEqual('release\n', producer.stdin.getvalue())
         producer.communicate.assert_called_once_with(timeout=10)
         self.assertEqual(['/usr/sbin/runuser', '-u', 'www-data', '--'], start.call_args.args[0][:4])
-        self.assertEqual(['/usr/sbin/runuser', '-u', 'herokid-codex', '--'], run.call_args_list[0].args[0][:4])
+        self.assertEqual(['/usr/sbin/runuser', '-u', 'herokid-codex', '-g', 'herokid-codex-bridge', '--'], run.call_args_list[0].args[0][:6])
         self.assertEqual(apply, '--apply' in run.call_args_list[0].args[0])
 
     def test_dry_run_keeps_deletion_disabled_and_uses_restricted_accounts(self):

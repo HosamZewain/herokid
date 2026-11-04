@@ -19,7 +19,7 @@ def main():
         try:
             line = producer.stdout.readline(1024 * 1024)
             plan = json.loads(line)
-            command = ['/usr/sbin/runuser', '-u', 'herokid-codex', '--', '/usr/bin/python3', '/opt/herokid-codex-worker/cleanup.py']
+            command = ['/usr/sbin/runuser', '-u', 'herokid-codex', '-g', 'herokid-codex-bridge', '--', '/usr/bin/python3', '/opt/herokid-codex-worker/cleanup.py']
             if args.apply:
                 command.append('--apply')
             result = subprocess.run(command, input=json.dumps(plan), capture_output=True, text=True, timeout=60)

@@ -22,6 +22,11 @@ class LocalCleanupPlan
             ->where('finished_at', '<=', $cutoff)->where('updated_at', '<=', $cutoff)->orderBy('finished_at')->cursor() as $run) {
             $receipt = config('codex_scenes.spool').'/outbox/'.$run->id.'/local-cleanup.json';
             if (is_file($receipt) && ! is_link($receipt)) {
+                if (! is_readable($receipt) || filesize($receipt) > 65536) {
+                    $plan['skipped'][] = ['id' => $run->id, 'reason' => 'local_receipt_requires_review'];
+
+                    continue;
+                }
                 $saved = json_decode(file_get_contents($receipt), true);
                 if (($saved['id'] ?? null) === $run->id && ($saved['local_images_removed'] ?? false)
                     && (($saved['shared_cache_done'] ?? false) || ! $plan['allow_generated_cache'])) {
