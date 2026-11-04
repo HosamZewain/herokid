@@ -21,11 +21,11 @@ def nginx(source):
         raise ValueError('Revalidate the current production Nginx config before applying')
     prefix = ("# No client IP, URI, query, cookies or customer payload in latency telemetry.\n"
               "log_format herokid_latency '$msec $status $request_time $upstream_response_time $bytes_sent';\n")
-    directives = '''    gzip_vary on;
+    directives = r'''    gzip_vary on;
     gzip_types text/css application/javascript application/json image/svg+xml font/ttf font/otf;
     location = /fpm-status { return 404; }
     # Build filenames are content hashes; preserve old assets during every release.
-    location ^~ /build/assets/ {
+    location ~ ^/build/assets/[^/]+-[A-Za-z0-9_-]+\.(?:css|js|svg|png|jpe?g|webp|gif|woff2?|ttf|otf|wasm)$ {
         try_files $uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable";
         add_header X-Content-Type-Options nosniff always;
