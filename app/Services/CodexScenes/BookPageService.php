@@ -193,6 +193,7 @@ class BookPageService
                 // item/component relations while another request edits personalization.
                 $item = OrderItem::where('order_id', $order->id)->lockForUpdate()->findOrFail($item->id);
                 $inputs = $this->approvedInputs($item, $manifest->fresh());
+                $admissionGuard?->__invoke();
                 $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $order->id, 'checkout_key' => $order->checkoutGroupKey(),
                     'order_item_id' => $item->id, 'production_kind' => 'coloring_book', 'protocol' => 6, 'scene_count' => $inputs['page_count'],
                     'source' => 'automatic', 'status' => 'waiting_slot', 'active_slot' => 1, 'previous_status' => $order->status, 'scenes' => [],

@@ -7,9 +7,11 @@ use App\Http\Controllers\Admin\AdminMediaUploadController;
 use App\Http\Controllers\Admin\AdminRoleController;
 use App\Http\Controllers\Admin\AdvertisingTargetingReportController;
 use App\Http\Controllers\Admin\AgentApiTokenController;
+use App\Http\Controllers\Admin\AgenticAutomationController;
 use App\Http\Controllers\Admin\AiProviderSettingsController;
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\AppLandingAnalyticsController;
+use App\Http\Controllers\Admin\AutoPilotMemoryController;
 use App\Http\Controllers\Admin\BookletPreviewController as AdminBookletPreviewController;
 use App\Http\Controllers\Admin\BostaController;
 use App\Http\Controllers\Admin\CategoryController;
@@ -454,12 +456,16 @@ Route::middleware('auth')->group(function () {
 
 // Admin Routes
 Route::middleware(['auth', 'is_admin', 'admin_audit', EnforceOrderAccess::class, ProtectAutomationOrders::class])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('orders/{order}/autopilot-monitor', [AgenticAutomationController::class, 'orderActivity'])
+        ->middleware('permission:orders.view')->name('orders.autopilot-monitor');
     Route::prefix('agentic-automation')->name('agentic.')->middleware(['permission:order_automation.view', 'permission:orders.view'])->group(function (): void {
-        Route::get('/', [\App\Http\Controllers\Admin\AgenticAutomationController::class, 'index'])->name('index');
-        Route::get('monitor', [\App\Http\Controllers\Admin\AgenticAutomationController::class, 'monitor'])->name('monitor');
-        Route::get('activity', [\App\Http\Controllers\Admin\AgenticAutomationController::class, 'activity'])->name('activity');
+        Route::get('/', [AgenticAutomationController::class, 'index'])->name('index');
+        Route::get('monitor', [AgenticAutomationController::class, 'monitor'])->name('monitor');
+        Route::get('activity', [AgenticAutomationController::class, 'activity'])->name('activity');
+        Route::post('pause-execution', [AgenticAutomationController::class, 'pauseExecution'])
+            ->middleware(['permission:order_automation.manage', 'permission:order_automation.execute'])->name('pause-execution');
         Route::prefix('memory')->name('memory.')->group(function (): void {
-            $controller = \App\Http\Controllers\Admin\AutoPilotMemoryController::class;
+            $controller = AutoPilotMemoryController::class;
             Route::get('/', [$controller, 'index'])->name('index');
             Route::get('create', [$controller, 'create'])->middleware('permission:order_automation.manage')->name('create');
             Route::post('/', [$controller, 'store'])->middleware('permission:order_automation.manage')->name('store');
@@ -468,7 +474,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', EnforceOrderAccess::class,
             Route::put('{memory}', [$controller, 'update'])->whereNumber('memory')->middleware('permission:order_automation.manage')->name('update');
             Route::post('{memory}/restore', [$controller, 'restore'])->whereNumber('memory')->middleware('permission:order_automation.manage')->name('restore');
         });
-        Route::get('orders/{order}', [\App\Http\Controllers\Admin\AgenticAutomationController::class, 'show'])->name('show');
+        Route::get('orders/{order}', [AgenticAutomationController::class, 'show'])->name('show');
     });
     Route::post('orders/{order}/payment-review/close', OrderPaymentReviewController::class)
         ->middleware(['permission:orders.view', 'permission:robodesk.review_payments'])

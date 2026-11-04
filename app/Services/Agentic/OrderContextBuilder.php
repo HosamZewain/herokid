@@ -86,7 +86,9 @@ class OrderContextBuilder
                 'shipping_behavior' => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_SHIPPING, $o->shipping_status),
                 'printing_status' => $o->printing_status, 'shipping_status' => $o->shipping_status, 'deleted' => $o->trashed(), 'active' => in_array($o->id, $activeIds, true)])->all(),
             'all_complete' => $activeIds === [], 'hold' => $held, 'automation_owned' => $ownership,
-            'automation_control' => ['state' => $control?->state ?? 'running', 'version' => (int) ($control?->version ?? 0)],
+            // Matches the native first-admission row. Creating its default running
+            // state is not a pause/resume edit; later versions still invalidate AI.
+            'automation_control' => ['state' => $control?->state ?? 'running', 'version' => (int) ($control?->version ?? 1)],
             'assignee_ref' => ($id = DB::table('order_group_assignments')->where('checkout_group_key', $key)->value('assigned_to_user_id')) ? 'staff:'.$id : null,
             'payment' => $payment,
             'confirmation' => ['required' => $live->contains('status', 'new'), 'status' => $confirmation?->status,
@@ -167,6 +169,9 @@ class OrderContextBuilder
         if (($settings = $execution->approved()) && $execution->includes($settings, $context['representative_id'])) {
             // Activation must cause a NEW decision; old Shadow proposals never replay.
             $context['execution_activation'] = $settings['activation_id'];
+            if (array_intersect($settings['actions'], ['send_order_confirmation', 'send_product_preview'])) {
+                $context['message_dispatch'] = app(MessageDispatchContext::class)->forCheckout($key);
+            }
         }
         $context['fingerprint'] = ContextFingerprint::hash($context);
         $context['observed_at'] = now()->toISOString();

@@ -51,7 +51,7 @@ class ActivityMonitor
         $order = $state?->representative_id ? Order::with('checkoutReference')->find($state->representative_id) : null;
         $lastRun = $control?->last_run_id ? AiAgentRun::with('decision')->find($control->last_run_id) : null;
 
-        return ['stage' => $stage, 'working' => $working, 'order' => $order,
+        return ['stage' => $stage, 'working' => $working, 'order' => $order, 'execution' => app(ExecutionMonitor::class)->snapshot(),
             'order_reference' => $order?->checkoutReference?->short_reference ?: ($order ? 'Order '.$order->id : null),
             'targets' => json_decode($control?->activity_targets ?? '[]', true) ?: [],
             'started_at' => $control?->activity_started_at, 'updated_at' => $control?->activity_updated_at,

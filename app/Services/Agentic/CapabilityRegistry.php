@@ -5,7 +5,7 @@ namespace App\Services\Agentic;
 /** Capabilities describe safe proposals; they hold no executable callbacks. */
 class CapabilityRegistry
 {
-    public const VERSION = 'autopilot-shadow-policy-v4';
+    public const VERSION = 'autopilot-control-policy-v5';
 
     public const ACTIONS = [
         'send_order_confirmation', 'generate_identity', 'generate_product_image',
@@ -41,6 +41,8 @@ class CapabilityRegistry
             $targets[] = $this->target($context['checkout_ref'], 'checkout', 'human_required', null, 'CUSTOMER_REQUESTED_CHANGES');
         } elseif ($context['payment']['review_pending']) {
             $targets[] = $this->target($context['checkout_ref'], 'checkout', 'human_required', null, 'PAYMENT_REVIEW_REQUIRED');
+        } elseif ($context['message_dispatch'] ?? null) {
+            $targets[] = $this->target($context['checkout_ref'], 'checkout', 'execute', $context['message_dispatch']['action'], 'EXISTING_MESSAGE_PREFLIGHT');
         } elseif ($context['confirmation']['required']) {
             $status = $context['confirmation']['status'];
             $targets[] = $this->target($context['checkout_ref'], 'checkout',

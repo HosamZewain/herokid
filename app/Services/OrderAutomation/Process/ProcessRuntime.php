@@ -146,13 +146,21 @@ class ProcessRuntime
         return $count;
     }
 
-    public function advance(int $id): void
+    public function advance(int $id, ?array $expectedMessage = null): void
     {
         if (! $this->policy->enabled()) {
             return;
         }
-        $send = DB::transaction(function () use ($id) {
+        $send = DB::transaction(function () use ($id, $expectedMessage) {
             $run = OrderProcessRun::lockForUpdate()->find($id);
+            if ($expectedMessage !== null) {
+                $node = $run ? collect($run->revision->definition['nodes'])->firstWhere('id', $run->node_id) : null;
+                if (! $run || ! in_array($run->status, ['queued', 'running'], true)
+                    || $run->version !== $expectedMessage['version'] || $run->node_id !== $expectedMessage['node_id']
+                    || ($node['type'] ?? null) !== 'whatsapp' || ($node['config']['template'] ?? null) !== $expectedMessage['template']) {
+                    return null;
+                }
+            }
             if (! $run || ! AutomationControl::admits($run->checkout_key) || ! in_array($run->status, ['queued', 'running', 'waiting_response', 'waiting_identity'], true) || ! $run->automation->enabled) {
                 return null;
             }

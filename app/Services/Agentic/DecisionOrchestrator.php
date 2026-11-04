@@ -122,7 +122,8 @@ class DecisionOrchestrator
                             $policy = ['version' => CapabilityRegistry::VERSION, 'allowed_proposal' => false, 'reason_code' => 'STALE_CONTEXT', 'execution_allowed' => false, 'requires_executor_preflight' => false];
                             $simulation = $this->gateway->simulate($decision, $policy, $locked->snapshot);
                         }
-                        AiOrderDecision::create(['agent_run_id' => $run->id, 'decision' => $decision, 'policy' => $policy, 'simulation' => $simulation]);
+                        $saved = AiOrderDecision::create(['agent_run_id' => $run->id, 'decision' => $decision, 'policy' => $policy, 'simulation' => $simulation]);
+                        app(AutoPilotAudit::class)->decision($run, $saved);
                         $run->update(['status' => $policy['reason_code'] === 'STALE_CONTEXT' ? 'stale' : ($policy['allowed_proposal'] ? 'simulated' : 'policy_blocked'),
                             'provider_metadata' => $response['metadata'] ?? [], 'finished_at' => now()]);
                         if ($locked->context_version !== $run->context_version || $policy['reason_code'] === 'STALE_CONTEXT') {
@@ -144,6 +145,7 @@ class DecisionOrchestrator
                 } catch (\Throwable $error) {
                     $code = $error instanceof \InvalidArgumentException ? 'INVALID_DECISION' : 'PROVIDER_RESULT_UNCERTAIN';
                     $run->update(['status' => 'failed', 'error_code' => $code, 'finished_at' => now()]);
+                    app(AutoPilotAudit::class)->failed($run, $code);
                     // Never reset or repeat an uncertain call; leave uncovered targets visible.
                     AiCheckoutState::whereKey($state->id)->where('context_version', $run->context_version)
                         ->update(['status' => 'error', 'error_code' => $code]);

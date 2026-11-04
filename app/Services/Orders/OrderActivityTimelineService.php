@@ -75,7 +75,7 @@ class OrderActivityTimelineService
             'id' => $log->id,
             'action' => $log->action,
             'description' => $log->description ?: $this->actionLabel($log->action),
-            'actor' => $log->user?->name ?? (data_get($log->properties, 'actor_name') === 'Automation' ? 'Automation' : 'النظام'),
+            'actor' => $log->user?->name ?? (in_array(data_get($log->properties, 'actor_name'), ['Automation', 'HeroKid Auto Pilot'], true) ? $log->properties['actor_name'] : 'النظام'),
             'created_at' => $log->created_at,
             'order_reference' => $order ? $this->orderReference($order) : null,
             'category' => $this->category($log->action),
@@ -178,6 +178,16 @@ class OrderActivityTimelineService
             'product_title' => 'المنتج',
             'story_title' => 'القصة',
             'child_name' => 'الطفل',
+            'autopilot_run' => 'مرجع قرار Auto Pilot',
+            'autopilot_target' => 'الوحدة المستهدفة',
+            'autopilot_decision' => 'قرار Auto Pilot',
+            'autopilot_policy' => 'نتيجة فحص القرار',
+            'autopilot_mode' => 'نوع السجل',
+            'autopilot_receipt' => 'إيصال تسليم الخطوة',
+            'autopilot_action' => 'الخطوة المطلوبة',
+            'autopilot_reason' => 'سبب التوقف',
+            'autopilot_executor' => 'مرجع المسار المسؤول',
+            'autopilot_state' => 'حالة التنفيذ',
         ] as $key => $label) {
             if (! isset($properties[$key]) || $properties[$key] === '') {
                 continue;

@@ -93,8 +93,10 @@ class ManualSceneService
                     }
                 }
                 $attempt = $order->childIdentityApprovedAttempt;
-                $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $order->id, 'checkout_key' => $order->checkoutGroupKey(), 'requested_by' => $user?->id, 'source' => $user ? 'manual' : 'automatic', 'protocol' => 4, 'status' => 'waiting_slot', 'active_slot' => 1, 'previous_status' => $order->status, 'fingerprint' => $this->fingerprint($order), 'scenes' => [],
-                    'snapshot' => ['prompt' => StoryProductionPrompt::forOrder($order), 'texts' => $texts['scenes'], 'identity_disk' => $attempt->output_disk, 'identity_path' => $attempt->output_storage_path, 'identity_checksum' => $attempt->output_checksum]]);
+                $fingerprint = $this->fingerprint($order);
+                $snapshot = ['prompt' => StoryProductionPrompt::forOrder($order), 'texts' => $texts['scenes'], 'identity_disk' => $attempt->output_disk, 'identity_path' => $attempt->output_storage_path, 'identity_checksum' => $attempt->output_checksum];
+                $admissionGuard?->__invoke();
+                $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $order->id, 'checkout_key' => $order->checkoutGroupKey(), 'requested_by' => $user?->id, 'source' => $user ? 'manual' : 'automatic', 'protocol' => 4, 'status' => 'waiting_slot', 'active_slot' => 1, 'previous_status' => $order->status, 'fingerprint' => $fingerprint, 'scenes' => [], 'snapshot' => $snapshot]);
                 $this->setStatus($order, 'generating', 'إضافة القصة إلى طابور توليد مشاهد Codex.');
                 if ($user) {
                     AdminActivityLogger::log(action: 'order.codex_scenes_requested', description: 'طلب توليد 13 مشهدًا عبر اشتراك Codex.', subject: $order, properties: ['run_id' => $run->id], admin: $user);

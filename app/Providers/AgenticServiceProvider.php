@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Jobs\DispatchAutoPilotActions;
 use App\Jobs\EvaluateAgenticShadow;
 use App\Models\ChildIdentityGenerationAttempt;
 use App\Models\CodexSceneRun;
@@ -16,7 +17,10 @@ use App\Models\OrderProcessIdentity;
 use App\Models\OrderProcessRun;
 use App\Models\OrderReviewManifest;
 use App\Models\PuzzleGeneration;
+use App\Models\RoboDeskIntegrationEvent;
+use App\Services\Agentic\AutoPilotAudit;
 use App\Services\Agentic\ContextObserver;
+use App\Services\Agentic\ProductionExecutionSettings;
 use App\Services\Agentic\Providers\CodexSdkProvider;
 use App\Services\Agentic\Providers\DecisionProvider;
 use App\Services\Agentic\Providers\MockProvider;
@@ -41,6 +45,22 @@ class AgenticServiceProvider extends ServiceProvider
         Schedule::command('agentic:observe')->everyMinute()->withoutOverlapping(5)->when(fn () => config('agentic.observe'));
         Schedule::call(fn () => EvaluateAgenticShadow::dispatch())->everyMinute()->name('agentic-shadow-dispatch')
             ->when(fn () => config('agentic.observe') && config('agentic.evaluate'));
+        Schedule::call(fn () => DispatchAutoPilotActions::dispatch())->everyMinute()->name('autopilot-action-dispatch')
+            ->when(fn () => config('agentic.observe') && config('agentic.evaluate') && app(ProductionExecutionSettings::class)->approved() !== null);
+        foreach ([PuzzleGeneration::class => 'puzzle', CodexSceneRun::class => 'codex_scene', OrderProcessRun::class => 'process_message',
+            RoboDeskIntegrationEvent::class => 'confirmation'] as $class => $executor) {
+            $class::saved(function (Model $model) use ($executor): void {
+                if (config('agentic.execution.enabled')) {
+                    try {
+                        app(AutoPilotAudit::class)->progress($model, $executor);
+                    } catch (\Throwable) {
+                        // The native executor remains authoritative. A secondary
+                        // timeline write must not retry an accepted provider step.
+                        Log::warning('autopilot_progress_audit_failed', ['executor_type' => $executor, 'executor_id' => $model->getKey()]);
+                    }
+                }
+            });
+        }
         foreach ([Order::class, OrderItem::class, OrderItemProductionComponent::class, OrderAttachment::class, OrderPreview::class,
             OrderPaymentEvent::class, OrderPaymentReview::class, OrderProcessRun::class, OrderProcessIdentity::class,
             OrderReviewManifest::class, PuzzleGeneration::class, CodexSceneRun::class, ChildIdentityGenerationAttempt::class] as $class) {

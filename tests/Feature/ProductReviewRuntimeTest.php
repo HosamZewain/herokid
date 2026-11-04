@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\DTOs\Ai\GptImageRequest;
 use App\DTOs\Ai\GptImageResult;
+use App\Jobs\AdvanceAutoPilotMessage;
 use App\Models\AdminActivityLog;
+use App\Models\AiProductionExecution;
 use App\Models\AiProvider;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
@@ -26,7 +28,12 @@ use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
 use App\Models\WhatsAppConversation;
+use App\Services\Agentic\CapabilityRegistry;
+use App\Services\Agentic\ContextObserver;
+use App\Services\Agentic\DecisionOrchestrator;
+use App\Services\Agentic\MessageDispatchContext;
 use App\Services\Agentic\OrderContextBuilder;
+use App\Services\Agentic\ProductionExecutor;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\GptImageClient;
 use App\Services\CodexScenes\BookPageService;
@@ -73,11 +80,103 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Mpdf\Mpdf;
 use setasign\Fpdi\PdfParser\StreamReader;
+use Tests\Support\AutoPilotExecutionFixtures;
 use Tests\TestCase;
 
 class ProductReviewRuntimeTest extends TestCase
 {
+    use AutoPilotExecutionFixtures;
     use RefreshDatabase;
+
+    public function test_autopilot_book_pages_admission_preserves_approved_cover_and_uses_existing_pool(): void
+    {
+        [$item, $run, $manifest] = $this->approvedBook();
+        $item->order->update(['paid_amount_cents' => 1, 'payment_status' => 'partially_paid']);
+        $this->enableSyntheticExecution(['generate_book_pages']);
+        $cover = PuzzleGeneration::sole()->getRawOriginal();
+        $state = app(ContextObserver::class)->observe($item->order->checkoutGroupKey());
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame(1, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+        $this->assertSame('waiting_slot', CodexSceneRun::sole()->status);
+        $this->assertSame($item->id, CodexSceneRun::sole()->order_item_id);
+        $this->assertSame($cover, PuzzleGeneration::sole()->getRawOriginal());
+        $this->assertSame($manifest->id, CodexSceneRun::sole()->snapshot['manifest_id']);
+    }
+
+    public function test_autopilot_book_cover_admission_preserves_variant_unit_and_does_not_start_pages(): void
+    {
+        $item = $this->book();
+        $item->order->update(['status' => 'new_confirmed']);
+        config(['puzzle_automation.after_event_id' => 999999, 'order_process.enabled' => false]);
+        $this->enableSyntheticExecution(['generate_book_cover']);
+        $state = app(ContextObserver::class)->observe($item->order->checkoutGroupKey());
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame(1, app(ProductionExecutor::class)->dispatchPass()['admitted'], json_encode([
+            'targets' => app(CapabilityRegistry::class)->targets($state->snapshot),
+            'receipts' => AiProductionExecution::pluck('reason_code')->all(),
+        ]));
+        $work = PuzzleGeneration::sole();
+        $this->assertSame($item->id, $work->order_item_id);
+        $this->assertSame('book_cover', $work->context['production_stage']);
+        $this->assertSame('queued', $work->status);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_autopilot_preview_dispatch_uses_exact_existing_message_node_and_preserves_receipts(): void
+    {
+        [$item, $run] = $this->generatedPreview();
+        app(ProcessRuntime::class)->advance($run->id); // Collect all outputs; stop at message node.
+        $this->enableSyntheticExecution(['send_product_preview']);
+        Queue::fake();
+        $state = app(ContextObserver::class)->observe($item->order->checkoutGroupKey());
+        $this->assertSame('send_product_preview', $state->snapshot['message_dispatch']['action']);
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame(1, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+        Http::assertNothingSent();
+        $job = Queue::pushed(AdvanceAutoPilotMessage::class)->sole();
+        $job->handle(app(ProcessRuntime::class));
+        $attempts = DB::table('order_process_message_attempts')->count();
+        $this->assertSame(1, $attempts);
+        Http::assertSentCount(2);
+        $job->handle(app(ProcessRuntime::class));
+        Http::assertSentCount(2);
+        $this->assertSame($attempts, DB::table('order_process_message_attempts')->count());
+        $this->assertDatabaseCount('puzzle_generations', 1);
+        $this->assertDatabaseHas('admin_activity_logs', ['action' => 'autopilot.progress', 'subject_id' => $item->order_id]);
+    }
+
+    public function test_autopilot_preview_job_rejects_revised_node_and_does_not_advance_other_work(): void
+    {
+        [$item, $run] = $this->generatedPreview();
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->enableSyntheticExecution(['send_product_preview']);
+        $context = app(MessageDispatchContext::class)->forCheckout($run->checkout_key);
+        $this->assertNotNull($context);
+        $before = DB::table('order_process_steps')->get()->toJson();
+        $run->refresh()->increment('version');
+        (new AdvanceAutoPilotMessage($run->id, $context))->handle(app(ProcessRuntime::class));
+        Http::assertNothingSent();
+        $this->assertSame($before, DB::table('order_process_steps')->get()->toJson());
+        $this->assertDatabaseCount('order_process_message_attempts', 0);
+    }
+
+    public function test_autopilot_book_guard_blocks_inside_original_admission_without_mutating_outputs(): void
+    {
+        [$item, $run, $manifest] = $this->approvedBook();
+        $called = false;
+        try {
+            app(BookPageService::class)->start($item, $manifest, false, function () use (&$called) {
+                $called = true;
+                throw new \RuntimeException('EXECUTION_STALE_CONTEXT');
+            });
+            $this->fail('Stale admission must fail');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('EXECUTION_STALE_CONTEXT', $e->getMessage());
+        }
+        $this->assertTrue($called);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+    }
 
     private string $png;
 

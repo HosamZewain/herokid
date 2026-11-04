@@ -116,8 +116,9 @@ class PuzzleAutomation
             }
             $candidate = new PuzzleGeneration(['order_id' => $order->id, 'unit_key' => $unitKey]);
             $this->assertNoOutput($candidate);
-            $event = OrderProcessEvent::create(['checkout_key' => $key, 'order_id' => $order->id,
-                'type' => 'autopilot_production_admitted', 'data' => ['unit_key' => $unitKey]]);
+            $admissionGuard(); // Capture/media reads must not conceal a concurrent brief edit.
+            $event = OrderProcessEvent::create(['event_key' => 'autopilot-first:'.$item->id, 'checkout_key' => $key, 'order_id' => $order->id,
+                'type' => 'autopilot_production_admitted', 'status' => 'processed', 'data' => ['unit_key' => $unitKey]]);
 
             return PuzzleGeneration::create(['order_id' => $order->id, 'order_item_id' => $item->id,
                 'event_id' => $event->id, 'checkout_key' => $key, 'unit_key' => $unitKey, 'context' => $context, 'status' => 'queued']);

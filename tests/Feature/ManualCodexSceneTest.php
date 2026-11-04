@@ -10,6 +10,9 @@ use App\Models\Order;
 use App\Models\Permission;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Agentic\ContextObserver;
+use App\Services\Agentic\DecisionOrchestrator;
+use App\Services\Agentic\ProductionExecutor;
 use App\Services\CodexScenes\ManualSceneService;
 use App\Services\CodexScenes\SceneTiming;
 use App\Services\Orders\AutomationAssignment;
@@ -26,11 +29,40 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Tests\Support\AutoPilotExecutionFixtures;
 use Tests\TestCase;
 
 class ManualCodexSceneTest extends TestCase
 {
+    use AutoPilotExecutionFixtures;
     use RefreshDatabase;
+
+    public function test_autopilot_story_admission_uses_existing_pool_and_never_marks_generation_complete(): void
+    {
+        $this->enableSyntheticExecution(['start_story_scene_generation']);
+        config(['codex_scenes.automatic' => true]);
+        $this->order->update(['payment_status' => 'partially_paid']);
+        $state = app(ContextObserver::class)->observe($this->order->checkoutGroupKey());
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame(1, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+        $this->assertSame('waiting_slot', CodexSceneRun::sole()->status);
+        $this->assertSame([], CodexSceneRun::sole()->scenes);
+        $this->assertSame(0, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+        Http::assertNothingSent();
+    }
+
+    public function test_autopilot_guard_runs_under_existing_checkout_lock_before_story_creation(): void
+    {
+        $status = $this->order->status;
+        try {
+            app(ManualSceneService::class)->start($this->order, null, fn () => throw new \RuntimeException('EXECUTION_STALE_CONTEXT'));
+            $this->fail('Stale admission must fail');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('EXECUTION_STALE_CONTEXT', $e->getMessage());
+        }
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        $this->assertSame($status, $this->order->fresh()->status);
+    }
 
     private Order $order;
 

@@ -7,10 +7,11 @@ use App\Models\AiAgentRun;
 use App\Models\AiCheckoutState;
 use App\Models\Order;
 use App\Models\Product;
-use App\Services\Agentic\CapabilityRegistry;
 use App\Services\Agentic\ActivityMonitor;
 use App\Services\Agentic\AutoPilotOrderScope;
+use App\Services\Agentic\CapabilityRegistry;
 use App\Services\Agentic\DecisionValidator;
+use App\Services\Agentic\ExecutionMonitor;
 use App\Services\Agentic\OrderContextBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,19 +39,38 @@ class AgenticAutomationController extends Controller
             ->header('Cache-Control', 'private, no-store');
     }
 
+    public function pauseExecution(Request $request)
+    {
+        // Stop admissions after any transaction already in flight; keep its receipts.
+        DB::transaction(function () use ($request) {
+            DB::table('ai_production_controls')->where('id', 1)->lockForUpdate()->first();
+            DB::table('ai_production_controls')->where('id', 1)->update(['paused' => true, 'paused_by' => $request->user()->id,
+                'paused_at' => now(), 'updated_at' => now()]);
+        });
+
+        return redirect()->route('admin.agentic.index')->with('success', 'توقف تسليم خطوات جديدة. تظل النتائج والخطوات التي قُبلت بالفعل تحت متابعة مساراتها الحالية.');
+    }
+
+    public function orderActivity(Request $request, Order $order)
+    {
+        return response()->json(['html' => view('admin.orders._autopilot', compact('order'))->render()])
+            ->header('Cache-Control', 'private, no-store');
+    }
+
     public function show(Request $request, Order $order, OrderContextBuilder $builder, CapabilityRegistry $registry)
     {
         // Fresh read, independent of provider, scheduler, stored snapshot and feature switches.
         $context = $builder->build($order->checkoutGroupKey());
         $state = AiCheckoutState::where('checkout_key', $builder->canonicalKey($order->checkoutGroupKey()))->first();
-        $history = AiAgentRun::where('checkout_state_id', $state?->id ?? 0)->with('decision')->latest('started_at')->paginate(30);
+        $history = AiAgentRun::where('checkout_state_id', $state?->id ?? 0)->with('decision.execution')->latest('started_at')->paginate(30);
         $matches = $state?->fingerprint === $context['fingerprint'];
         if (! $request->user()->hasPermission('orders.statistics.view')) {
             unset($context['operational']['paid_amount_cents']);
         }
 
         return response()->view('admin.agentic.show', ['order' => $order, 'context' => $context, 'state' => $state,
-            'history' => $history, 'matches' => $matches, 'targets' => $registry->targets($context), 'tasks' => $registry->humanTasks($context)])
+            'history' => $history, 'matches' => $matches, 'targets' => $registry->targets($context), 'tasks' => $registry->humanTasks($context),
+            'execution' => app(ExecutionMonitor::class)->snapshot($order->checkoutGroupKey())])
             ->header('Cache-Control', 'private, no-store');
     }
 
@@ -87,7 +107,7 @@ class AgenticAutomationController extends Controller
             ->withPath(route('admin.agentic.index'))->appends($filters);
         $orders = Order::whereIn('checkout_group_key', $rows->pluck('checkout_group_key'))->select('id', 'checkout_group_key', 'status')
             ->with('checkoutReference:id,checkout_group_key,short_reference')->get()->groupBy('checkout_group_key');
-        $latest = AiAgentRun::whereIn('id', $rows->pluck('last_run_id')->filter())->with('decision')->get()->keyBy('checkout_state_id');
+        $latest = AiAgentRun::whereIn('id', $rows->pluck('last_run_id')->filter())->with('decision.execution')->get()->keyBy('checkout_state_id');
         $rows->setCollection($rows->getCollection()->map(function ($row) use ($orders, $latest) {
             $siblings = $orders->get($row->checkout_group_key, collect());
             $row->reference = $siblings->first()?->checkoutReference?->short_reference ?: 'Order '.$row->representative_id;

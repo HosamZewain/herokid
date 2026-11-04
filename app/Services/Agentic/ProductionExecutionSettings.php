@@ -6,7 +6,7 @@ use Carbon\CarbonImmutable;
 
 final class ProductionExecutionSettings
 {
-    public const ACTIONS = ['generate_product_image', 'generate_book_cover', 'start_story_scene_generation', 'generate_book_pages'];
+    public const ACTIONS = ['generate_product_image', 'generate_book_cover', 'start_story_scene_generation', 'generate_book_pages', 'send_order_confirmation', 'send_product_preview'];
 
     /** Invalid or incomplete activation fails closed; no default-wide rollout. */
     public function approved(): ?array

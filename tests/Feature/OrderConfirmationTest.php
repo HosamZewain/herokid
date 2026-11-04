@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\SendOrderConfirmationJob;
+use App\Models\AdminActivityLog;
 use App\Models\CheckoutCustomerWorkflow;
 use App\Models\Order;
 use App\Models\Permission;
@@ -11,6 +12,9 @@ use App\Models\RoboDeskIntegrationEvent;
 use App\Models\User;
 use App\Models\WhatsAppConversation;
 use App\Models\WhatsAppConversationMessage;
+use App\Services\Agentic\ContextObserver;
+use App\Services\Agentic\DecisionOrchestrator;
+use App\Services\Agentic\ProductionExecutor;
 use App\Services\RoboDesk\Conversations\OrderConversationService;
 use App\Services\RoboDesk\OrderMessageHistory;
 use App\Services\RoboDesk\OrderMessageRetry;
@@ -23,11 +27,49 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Tests\Support\AutoPilotExecutionFixtures;
 use Tests\TestCase;
 
 class OrderConfirmationTest extends TestCase
 {
+    use AutoPilotExecutionFixtures;
     use RefreshDatabase;
+
+    public function test_autopilot_hands_off_pending_confirmation_once_and_keeps_original_send_receipt(): void
+    {
+        $this->enableSyntheticExecution(['send_order_confirmation']);
+        $order = $this->order('autopilot-confirmation');
+        $event = $this->request($order);
+        Queue::fake();
+        $state = app(ContextObserver::class)->observe($order->checkoutGroupKey());
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame(1, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+        $this->assertSame(0, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+        Queue::assertPushed(SendOrderConfirmationJob::class, 1);
+        Http::assertNothingSent();
+        $this->send($event);
+        $this->assertSame('succeeded', $event->fresh()->status);
+        $this->assertSame(1, $event->fresh()->attempts);
+        $this->send($event);
+        $this->assertSame(1, $event->fresh()->attempts);
+        $this->assertDatabaseHas('admin_activity_logs', ['action' => 'autopilot.admission', 'subject_id' => $order->id]);
+        $this->assertDatabaseHas('admin_activity_logs', ['action' => 'autopilot.progress', 'subject_id' => $order->id]);
+    }
+
+    public function test_autopilot_never_replays_unknown_confirmation_or_overrides_a_later_pause(): void
+    {
+        $this->enableSyntheticExecution(['send_order_confirmation']);
+        $order = $this->order('autopilot-pause');
+        $event = $this->request($order);
+        Queue::fake();
+        $state = app(ContextObserver::class)->observe($order->checkoutGroupKey());
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $event->update(['status' => 'unknown', 'attempts' => 1]);
+        $this->assertSame(0, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+        Queue::assertNothingPushed();
+        Http::assertNothingSent();
+        $this->assertSame('unknown', $event->fresh()->status);
+    }
 
     private array $messages = [];
 
@@ -274,7 +316,7 @@ class OrderConfirmationTest extends TestCase
         $this->send($event);
         $this->send($event->fresh());
         Http::assertSentCount(2);
-        $this->assertSame(1, \App\Models\AdminActivityLog::where('action', 'automation.confirmation_send_started')->count());
+        $this->assertSame(1, AdminActivityLog::where('action', 'automation.confirmation_send_started')->count());
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/start/sendMsg')
             && $r['language'] === 'ar-EG' && $r['to'] === '201000000001' && ! isset($r['procedureId'])
             && $r['template']['data'][1] === $one->checkoutReference->short_reference

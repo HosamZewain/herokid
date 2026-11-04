@@ -83,6 +83,7 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
             @include('admin.orders._codex-generation-banner', ['generationBannerOrder' => $order])
+            @include('admin.orders._autopilot-panel')
             @if(session('success'))
             <div class="bg-green-50 border border-green-200 text-green-700 px-5 py-4 rounded-xl font-bold flex items-center gap-2">
                 ✅ {{ session('success') }}

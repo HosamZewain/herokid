@@ -1,3 +1,109 @@
+# HeroKid Auto Pilot — controlled execution preparation (4 November 2026)
+
+## Current owner instruction and verified base
+
+The owner now requests actual production, order confirmations and preview messages,
+with every decision, step, result, pause and wait visible on the order page. This
+supersedes the Phase 1 implementation-only scope. Manual holds, customer/staff
+approvals, recorded payments, uncertain charge receipts and existing ownership
+remain binding. Autonomous execution is **prepared, OFF and not deployed** in this
+working branch. An explicit AWS release/targeted-migration approval is still needed
+under AGENTS.md before applying this new release.
+
+Before continuing implementation, GitHub main and AWS HEAD were both verified as
+`449cb0194cfaa772ba4ae7c855d7028aaebd9724`; all17 changed-file hashes matched. The
+new main guidance, valid same-child photo fallback and explicit untouched-preflight
+recovery are merged. Only a documentation merge conflict required reconciliation.
+The primary checkout's unrelated mobile/UI work remains untouched. Branch:
+`codex/autopilot-controlled-execution-20261104`.
+
+A SELECT-only inventory at10:08:38UTC covered261 active checkouts and601 decision
+targets without errors. Ten units were eligible for production preflight (8 product
+images,2 book covers); this was eligibility at scan time, not permission or proof
+of provider admission. All other reasons remain visible; no historical attempts,
+paused workflows, completed artwork or uncertain sends are automatically replayed.
+
+## Delivery and admission contract
+
+1. Preserve the isolated ChatGPT Decision Provider, zero tools, source/secret
+   isolation and no paid API fallback. Every decision still passes the existing
+   Shadow simulation; a **separate trusted application executor** can admit a
+   permitted step only after explicit configuration and a fresh policy check.
+2. Fail closed unless activation ID/time, allowed actions, checkout scope and a
+   separate action/day limit are complete. All defaults remain OFF/empty/zero.
+   The permanent AI decision limit stays1000/day; it is NOT a production or
+   message budget. Existing per-product estimates/caps and Codex pool concurrency
+   remain unchanged. No new AWS service, worker resource or recurring spend.
+3. Admit at most3 steps per pass on the existing dedicated queue, tries1. A locked
+   singleton serializes admission budget/pause state; immutable per-decision
+   receipts and operation keys prevent repeats. Native first-attempt checks and
+   unique active-unit reservations remain the authoritative final fence.
+4. Require a fresh post-activation Codex decision, subscription/zero-tool/isolation
+   evidence, current memory and context fingerprints. Lock memory and perform the
+   last check **inside each native executor's checkout lock**. Keep the established
+   Codex-pool lock ordering. Do not call paid providers in the admission gateway.
+5. Start product images/covers through PuzzleAutomation first-admission preflight;
+   start stories and approved book interiors through their existing services.
+   Never use regenerate/resumeQuality/manual-return paths, fabricate payment or
+   approval, discard prior outputs, or take ownership from existing automation.
+6. Confirmations use only existing unattempted eligible pending outbox events.
+   Preview/confirmation workflow messages use only the exact currently queued
+   message node, version and approved template of an already enabled owned run.
+   A versioned job delegates to ProcessRuntime; it cannot advance a different
+   node, enroll history or resend an uncertain/accepted message. Native message
+   attempts and receipts retain ownership and billing certainty.
+7. Successful admission means queued/accepted, never completed. Read actual
+   executor states and record subsequent transitions. Expired decisions cause a
+   bounded refresh of only the expired target through the normal AI quota, without
+   reopening covered sibling targets or executing old Shadow proposals.
+8. Add a persistent stop for **new admissions** accessible to existing global
+   automation manage/execute permissions. Existing in-flight work finishes under
+   native controls. Observation and order-page read access remain independent of
+   model availability; no MCP write tools or new model capabilities are exposed.
+
+## Owner-visible audit and operations
+
+Every new decision (including waiting/manual/escalation), failed decision,
+admission/refusal and tracked executor status transition records the Auto Pilot
+actor on the existing order activity timeline. Records contain safe reason codes,
+unit IDs and native receipt references, not photos, secrets or free-form customer
+payloads. Existing immutable decisions remain accessible with memory versions.
+
+The order page shows latest observations, changed-data warnings, current blockers,
+AI unavailability/quota waits, recent decisions and native execution states. A
+read-only scoped endpoint refreshes every15seconds without AI calls. The global
+activity display distinguishes decision work from execution, preserves older
+in-flight work in the display, and includes the separate action count/stop control.
+
+## Validation and release gate
+
+- Before:404 selected automation tests passed on PHP8.3 SQLite; after merging the
+  latest main,411 passed. Extend validation to confirmation, order timeline,
+  all six admission adapters, isolation/authentication, stale/duplicate decisions,
+  independent sibling units, scope/pause/quota/expiry, permissions and read-only UI.
+- Run final suites on synthetic SQLite and isolated MySQL8.4 with external requests
+  disabled; use mocked transport/image results only. Never run tests on AWS data.
+- Build from this isolated lockfile, retain earlier hashed public assets, inspect
+  Arabic RTL output and validate the manifest/path portability.
+- The approved real-model benchmark remains89/89 correct with current approved
+  memory; do not relabel mock adapter tests as model accuracy or add unapproved
+  cases to its denominator. Additional message admission cases use synthetic
+  execution fixtures; no actual customer message is a test.
+- Prepare the exact source diff and the one additive migration
+  `2026_11_04_100000_create_autopilot_production_admissions.php` (two audit/control
+  tables). No production writes or migration before specific release approval.
+- At release time recheck GitHub/AWS SHA and hashes again, preserve .env/private
+  cached config and1000/day, take the runbook backup/checkpoint, apply only the
+  targeted migration, rebuild caches narrowly and gracefully refresh affected PHP
+  workers. Preserve the running Codex generation service and all queues/receipts.
+- Verify authenticated order/dashboard behavior, source hashes, public HTTPS,
+  errors and native queue state. Activation is a separate recorded configuration
+  step, starting with a bounded named cohort and reviewed daily action allowance,
+  then expanding to all eligible orders after observing real receipts. Never
+  equate scans of all orders with forced execution of held/unsupported work.
+
+## Historical Phase 1 record
+
 # HeroKid Auto Pilot — Phase 1
 
 ## Current-memory reevaluation COMPLETE; 1000/day LIVE — 4 November 2026

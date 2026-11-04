@@ -33,6 +33,7 @@ return new class extends Migration
             $t->string('reason_code', 80)->nullable();
             $t->string('executor_type', 32)->nullable();
             $t->string('executor_id', 80)->nullable();
+            $t->index(['executor_type', 'executor_id', 'status'], 'ai_execution_native_lookup');
             $t->timestamps();
         });
     }

@@ -2,7 +2,7 @@
     <x-slot name="header"><h1 class="text-2xl font-bold">HeroKid Auto Pilot — متابعة الطلبات</h1></x-slot>
     <main class="mx-auto max-w-7xl space-y-6 p-6" dir="rtl">
         <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-            <strong>Shadow Mode — اقتراحات ومحاكاة فقط</strong>
+            <strong>{{ $activity['execution']['enabled'] ? 'HeroKid Auto Pilot — قرارات وتنفيذ ضمن النطاق المعتمد' : 'Shadow Mode — اقتراحات ومحاكاة فقط' }}</strong>
             <p>المتابعة التشغيلية مستقلة عن الذكاء الاصطناعي. التنفيذ الفعلي مستمر من خلال خدمات HeroKid الحالية والموظفين.</p>
         </div>
         <form method="GET" class="flex flex-wrap items-end gap-3">
