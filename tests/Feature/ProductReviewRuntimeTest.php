@@ -55,6 +55,7 @@ use App\Services\Orders\OrderProductPreviewService;
 use App\Services\Orders\ProductProductionPromptSyncService;
 use App\Services\Orders\StaffPreviewInputs;
 use App\Services\ProductAutomation\BookCatalog;
+use App\Services\ProductAutomation\BookVariantSnapshot;
 use App\Services\ProductAutomation\PuzzleAutomation;
 use App\Services\ProductAutomation\PuzzleInputs;
 use App\Services\RoboDesk\OrderConfirmationSendException;
@@ -1718,5 +1719,49 @@ class ProductReviewRuntimeTest extends TestCase
         Http::assertNothingSent();
         $this->expectExceptionMessage('existing_workflow_or_manual_hold');
         $cohort->enroll($item->order->checkoutGroupKey(), $flow);
+    }
+
+    public function test_missing_variant_pages_are_repaired_only_during_explicit_unstarted_enrollment(): void
+    {
+        $items = collect([$this->book(), $this->book()]);
+        $key = $items->first()->order->checkoutGroupKey();
+        foreach ($items as $item) {
+            $variant = $item->product->variants()->create(['name_ar' => 'كتاب 20 صفحة', 'book_page_count' => 20, 'is_active' => true]);
+            $item->update(['product_variant_id' => $variant->id, 'variant_snapshot' => ['id' => $variant->id, 'name_ar' => $variant->name_ar]]);
+            $item->productionComponents()->where('production_stage', 'book_interior')->update(['quantity_per_item' => 1]);
+            $item->order->updateQuietly(['checkout_group_key' => $key, 'status' => 'new_confirmed']);
+        }
+        $flow = OrderAutomation::where('name', 'Synthetic all previews')->sole();
+        app(PreviewCohort::class)->inspect($key, $flow);
+        foreach ($items as $item) {
+            $this->assertNull(data_get($item->fresh()->variant_snapshot, 'book_page_count'));
+        }
+        $run = app(PreviewCohort::class)->enroll($key, $flow);
+        $this->assertSame('queued', $run->status);
+        foreach ($items as $item) {
+            $this->assertSame(20, $item->fresh()->variant_snapshot['book_page_count']);
+            $this->assertSame(20, $item->fresh()->productionComponents->firstWhere('production_stage', 'book_interior')->quantity_per_item);
+            $this->assertSame(0, $item->order->fresh()->paid_amount_cents);
+        }
+        $this->assertDatabaseCount('puzzle_generations', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_variant_repair_refuses_existing_output_and_mismatched_catalog_selection(): void
+    {
+        $item = $this->book();
+        $variant = $item->product->variants()->create(['name_ar' => 'كتاب 40 صفحة', 'book_page_count' => 40, 'is_active' => true]);
+        $item->update(['product_variant_id' => $variant->id, 'variant_snapshot' => ['id' => $variant->id, 'name_ar' => 'كتاب 20 صفحة']]);
+        $repair = app(BookVariantSnapshot::class);
+        try {
+            $repair->prepare($item->fresh());
+            $this->fail('Mismatched purchased variant must not be repaired');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('book_variant_requires_review', $e->getMessage());
+        }
+        $item->update(['variant_snapshot' => ['id' => $variant->id, 'name_ar' => $variant->name_ar]]);
+        app(OrderProductPreviewService::class)->upload($item->order, [UploadedFile::fake()->image('old.png')], null, $this->actor);
+        $this->expectExceptionMessage('existing_book_output_or_attempt');
+        $repair->persist($item->fresh());
     }
 }

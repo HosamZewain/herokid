@@ -28,7 +28,7 @@ class OrderAutomationAdmission
             'puzzle_photos_required', 'photos_required', 'puzzle_photo_missing' => 'صور الطفل ناقصة أو غير متاحة. راجع صور كل طفل ثم أعد الفحص.',
             'existing_workflow_or_manual_hold', 'existing_identity_or_output', 'existing_book_output_or_attempt', 'existing_product_attempt_requires_review' => 'يوجد عمل سابق أو إيقاف يدوي؛ راجع النتائج أو استأنف المسار الحالي بدل إنشاء مسار مكرر.',
             'book_manual_brief_requires_review' => 'برومبت كتاب التلوين القديم معدل يدويًا؛ يلزم مراجعته وفصل الكفر عن الصفحات قبل التشغيل.',
-            'book_variant_requires_review' => 'مقاس الكتاب أو عدد صفحاته يحتاج مراجعة قبل التشغيل.',
+            'book_variant_requires_review', 'puzzle_book_variant_requires_review' => 'اختيار كتاب التلوين أو عدد صفحاته غير مكتمل. افتح تعديل الطلب وراجع اختيار ٢٠ أو ٤٠ صفحة والمقاس، ثم أعد الفحص. لا يلزم تسجيل دفع لتوليد الكفر.',
             'order_stage_requires_review', 'conditions_not_matched' => 'يلزم تأكيد كل عناصر الطلب، وألا تكون الطباعة أو الشحن قد بدأت.',
             'workflow_unavailable' => 'لا يوجد مسار معاينة واحد مفعّل ومطابق لهذا الطلب حاليًا؛ راجع إعداد الأوتوميشن.',
             default => 'بيانات الطلب أو إعدادات الإنتاج تحتاج مراجعة قبل الإدخال للأوتوميشن. رمز الفحص: '.$code,

@@ -12,6 +12,7 @@ use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\ProductAutomation\BookCatalog;
+use App\Services\ProductAutomation\BookVariantSnapshot;
 use App\Services\ProductAutomation\PuzzleInputs;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -66,6 +67,7 @@ class PreviewCohort
                         ->map(fn ($c) => new OrderItemProductionComponent(['stable_key' => $c->stable_key, 'name' => $c->name, 'production_stage' => $c->production_stage,
                             'prompt_template' => $c->prompt_template, 'quantity_per_item' => $c->production_stage === 'book_interior' ? ($variant?->book_page_count ?: $c->quantity_per_item) : 1])));
                 }
+                app(BookVariantSnapshot::class)->prepare($item);
                 $input = app(PuzzleInputs::class)->capture($item);
                 $previous = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first();
                 if ($previous && ($previous->status !== 'succeeded' || ! hash_equals($input['fingerprint'], $previous->context['fingerprint'] ?? ''))) {
@@ -89,6 +91,7 @@ class PreviewCohort
             foreach (Order::whereIn('id', $snapshot['order_ids'])->with('items')->get() as $order) {
                 foreach ($order->items->whereIn('item_type', ['product', 'product_add_on']) as $item) {
                     app(BookCatalog::class)->upgrade($item);
+                    app(BookVariantSnapshot::class)->persist($item);
                 }
             }
             $snapshot = app(ProcessOrderContext::class)->snapshot(app(ProcessOrderContext::class)->orders($key, true));

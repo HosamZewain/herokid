@@ -30,6 +30,7 @@ use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\FaqController;
 use App\Http\Controllers\Admin\FreeShippingOfferController;
 use App\Http\Controllers\Admin\HomepageStoreSectionController;
+use App\Http\Controllers\Admin\LegacyBookAdmissionController;
 use App\Http\Controllers\Admin\MobileGamesController;
 use App\Http\Controllers\Admin\MobileOperationsController;
 use App\Http\Controllers\Admin\MobilePushCampaignController;
@@ -842,6 +843,8 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', EnforceOrderAccess::class,
     Route::get('orders/workspace/progress', [OrderWorkspaceController::class, 'progress'])->middleware('permission:orders.view')->name('orders.workspace.progress');
     Route::post('orders/{order}/workspace/admit', [OrderWorkspaceController::class, 'admit'])->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.automation.control', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.workspace.admit');
     Route::post('orders/{order}/workspace/preview-approval', [OrderWorkspaceController::class, 'approvePreview'])->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.automation.control', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.workspace.preview-approval');
+    Route::get('orders/{order}/workspace/book/{item}/legacy', [LegacyBookAdmissionController::class, 'show'])->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.automation.control', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.workspace.legacy-book');
+    Route::post('orders/{order}/workspace/book/{item}/legacy', [LegacyBookAdmissionController::class, 'store'])->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.automation.control', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.workspace.legacy-book-approve');
     Route::post('orders/{order}/workspace/book/{item}/start', [OrderWorkspaceController::class, 'startBook'])->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.automation.control', 'permission:orders.photos.view', 'permission:orders.production_prompt.manage'])->name('orders.workspace.book-start');
     Route::post('orders/{order}/workspace/control', [OrderWorkspaceController::class, 'control'])->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.automation.control'])->name('orders.workspace.control');
     Route::get('orders/export', [OrderController::class, 'export'])->middleware(['permission:orders.view', 'throttle:10,1'])->name('orders.export');

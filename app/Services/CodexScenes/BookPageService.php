@@ -2,7 +2,9 @@
 
 namespace App\Services\CodexScenes;
 
+use App\Exceptions\LegacyBookReviewRequired;
 use App\Models\CodexSceneRun;
+use App\Models\LegacyBookCoverApproval;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderPreview;
@@ -16,6 +18,7 @@ use App\Services\Orders\AutomationAssignment;
 use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\BookPromptSync;
+use App\Services\Orders\LegacyBookAdmission;
 use App\Services\Orders\StaffPreviewInputs;
 use App\Services\ProductAutomation\PuzzleInputs;
 use App\Support\ProductProductionPrompt;
@@ -38,8 +41,14 @@ class BookPageService
         return in_array(6, $health['supported_protocols'] ?? [], true);
     }
 
-    private function approvedInputs(OrderItem $item, OrderReviewManifest $manifest, bool $pausedResume = false): array
+    private function approvedInputs(OrderItem $item, ?OrderReviewManifest $manifest, bool $pausedResume = false): array
     {
+        if (! $manifest && LegacyBookCoverApproval::where('order_item_id', $item->id)->exists()) {
+            return app(LegacyBookAdmission::class)->approvedInputs($item);
+        }
+        if (! $manifest) {
+            throw new RuntimeException('Book approval unavailable');
+        }
         $item->loadMissing('order', 'productionComponents', 'product.productionComponents');
         if (! $manifest->approved_at || $manifest->checkout_key !== $item->order->checkoutGroupKey()
             || OrderReviewManifest::where('checkout_key', $manifest->checkout_key)->max('id') !== $manifest->id
@@ -88,6 +97,10 @@ class BookPageService
 
     private function inputFailureReason(RuntimeException $e): string
     {
+        if ($e instanceof LegacyBookReviewRequired) {
+            return $e->getMessage();
+        }
+
         return match ($e->getMessage()) {
             'Book approval unavailable' => 'اعتماد الكفر غير صالح للمسار الحالي؛ راجع المعاينة.',
             'Book inputs changed after approval' => 'تغيرت بيانات الكتاب أو صوره بعد اعتماد الكفر؛ راجع المعاينة الحالية وسجل موافقة العميل عليها قبل التشغيل.',
@@ -105,13 +118,20 @@ class BookPageService
     public function fingerprint(CodexSceneRun $run): string
     {
         $item = OrderItem::where('order_id', $run->order_id)->findOrFail($run->order_item_id);
-        $manifest = OrderReviewManifest::findOrFail($run->snapshot['manifest_id']);
+        $manifest = isset($run->snapshot['legacy_approval_id']) ? null : OrderReviewManifest::findOrFail($run->snapshot['manifest_id']);
 
         return hash('sha256', json_encode($this->approvedInputs($item, $manifest), JSON_THROW_ON_ERROR));
     }
 
     public function statusEligible(Order $order, bool $explicit = false): bool
     {
+        if ($order->printing_status !== 'not_started' || $order->shipping_status !== 'not_ready') {
+            return false;
+        }
+        if ($explicit && in_array($order->status, ['waiting_customer', 'preview_uploaded'], true)
+            && LegacyBookCoverApproval::whereIn('order_item_id', $order->items()->select('id'))->exists()) {
+            return true;
+        }
         if (in_array($order->status, ['new_confirmed', 'costomer_confirmed', 'ready_preview', 'pending_team_review'], true)) {
             return true;
         }
@@ -154,7 +174,7 @@ class BookPageService
             return 'بانتظار اكتمال القصة المرتبطة بالطفل.';
         }
         $manifest = OrderReviewManifest::where('checkout_key', $order->checkoutGroupKey())->latest('id')->first();
-        if (! $manifest?->approved_at) {
+        if (! $manifest?->approved_at && ! LegacyBookCoverApproval::where('order_item_id', $item->id)->exists()) {
             return 'بانتظار اعتماد العميل للكفر في النسخة الحالية من المعاينة.';
         }
         try {
@@ -166,7 +186,7 @@ class BookPageService
         return null;
     }
 
-    public function start(OrderItem $item, OrderReviewManifest $manifest, bool $explicit = false): CodexSceneRun
+    public function start(OrderItem $item, ?OrderReviewManifest $manifest, bool $explicit = false): CodexSceneRun
     {
         if (! config('product_review.enabled') || ! config('product_review.book_pages_enabled') || ! $this->workerReady()) {
             throw new RuntimeException('Book production disabled');
@@ -191,7 +211,7 @@ class BookPageService
                 // Re-read after checkout locking: the HTTP preflight may hold stale
                 // item/component relations while another request edits personalization.
                 $item = OrderItem::where('order_id', $order->id)->lockForUpdate()->findOrFail($item->id);
-                $inputs = $this->approvedInputs($item, $manifest->fresh());
+                $inputs = $this->approvedInputs($item, $manifest?->fresh());
                 $run = CodexSceneRun::create(['id' => (string) Str::uuid(), 'order_id' => $order->id, 'checkout_key' => $order->checkoutGroupKey(),
                     'order_item_id' => $item->id, 'production_kind' => 'coloring_book', 'protocol' => 6, 'scene_count' => $inputs['page_count'],
                     'source' => 'automatic', 'status' => 'waiting_slot', 'active_slot' => 1, 'previous_status' => $order->status, 'scenes' => [],
