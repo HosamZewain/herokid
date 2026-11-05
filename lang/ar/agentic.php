@@ -1,6 +1,17 @@
 <?php
 
 return [
+    'dashboard_reasons' => [
+        'OUTPUT_REVIEW_AND_STUDIO' => 'مراجعة المخرجات وتجهيزها',
+        'FULFILLMENT_REQUIRES_TEAM' => 'استكمال الطباعة والتجهيز والشحن',
+        'PRESERVE_OUTPUT_REVIEW_ATTEMPT' => 'مراجعة النتائج الحالية',
+        'RECORDED_PAYMENT_REQUIRED' => 'بانتظار تسجيل الدفع',
+        'CONFIRMATION_REQUIRED' => 'بانتظار تأكيد العميل',
+        'CUSTOMER_COVER_APPROVAL_REQUIRED' => 'بانتظار اعتماد الغلاف',
+        'UNSUPPORTED_CAPABILITY' => 'منتج يحتاج تنفيذًا بشريًا',
+        'CUSTOMER_REQUESTED_CHANGES' => 'تعديلات طلبها العميل',
+        'CUSTOMER_DELIVERY_PENDING' => 'بانتظار التسليم للعميل',
+    ],
     'execution_outcomes' => ['waiting' => 'في الطابور أو ينتظر ردًا', 'running' => 'جارٍ العمل الآن',
         'production_completed' => 'مسارات إنتاج اكتملت', 'message_accepted' => 'طلبات إرسال قبلها مزوّد الرسائل',
         'workflow_completed' => 'مسارات متابعة الرسائل اكتملت', 'failed' => 'مسارات تعثرت',

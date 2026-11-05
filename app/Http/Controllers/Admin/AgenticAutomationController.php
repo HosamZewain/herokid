@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Services\Agentic\ActivityMonitor;
 use App\Services\Agentic\AutoPilotOrderScope;
 use App\Services\Agentic\CapabilityRegistry;
+use App\Services\Agentic\DashboardMonitor;
 use App\Services\Agentic\DecisionValidator;
 use App\Services\Agentic\ExecutionMonitor;
 use App\Services\Agentic\OrderContextBuilder;
@@ -23,7 +24,7 @@ class AgenticAutomationController extends Controller
 
     public function index(Request $request)
     {
-        return response()->view('admin.agentic.index', $this->data($request) + ['activity' => app(ActivityMonitor::class)->snapshot()])
+        return response()->view('admin.agentic.index', $this->data($request) + ['activity' => app(ActivityMonitor::class)->snapshot(), 'cockpit' => app(DashboardMonitor::class)->snapshot()])
             ->header('Cache-Control', 'private, no-store');
     }
 
@@ -35,7 +36,7 @@ class AgenticAutomationController extends Controller
 
     public function activity(ActivityMonitor $monitor)
     {
-        return response()->json(['html' => view('admin.agentic._activity', ['activity' => $monitor->snapshot()])->render()])
+        return response()->json(['html' => view('admin.agentic._cockpit', ['activity' => $monitor->snapshot(), 'cockpit' => app(DashboardMonitor::class)->snapshot()])->render()])
             ->header('Cache-Control', 'private, no-store');
     }
 
@@ -78,7 +79,7 @@ class AgenticAutomationController extends Controller
     {
         $filters = $request->validate(['state' => ['nullable', Rule::in(self::STATES)],
             'decision' => ['nullable', Rule::in(DecisionValidator::TYPES)],
-            'product' => 'nullable|integer|min:1', 'scope' => 'nullable|in:active,all', 'page' => 'nullable|integer|min:1']);
+            'reason' => ['nullable', 'string', 'max:100', 'regex:/^[A-Z0-9_]+$/'], 'product' => 'nullable|integer|min:1', 'scope' => 'nullable|in:active,all', 'page' => 'nullable|integer|min:1']);
         $active = AutoPilotOrderScope::activeOrdersQuery()
             ->whereNotIn('checkout_group_key', DB::table('order_group_merge_aliases')->select('source_checkout_group_key'));
         $activeKeys = (clone $active)->select('checkout_group_key')->distinct();
@@ -99,6 +100,16 @@ class AgenticAutomationController extends Controller
             $groups->whereExists(function ($q) use ($decision) {
                 $q->selectRaw('1')->from('ai_order_decisions as d')->join('ai_agent_runs as r', 'r.id', '=', 'd.agent_run_id')
                     ->whereColumn('r.id', 's.last_run_id')->where('d.decision->decision', $decision);
+            });
+        }
+        if ($reason = $filters['reason'] ?? null) {
+            $groups->whereNull('s.dirty_at')->whereIn('s.status', ['covered', 'partial'])
+                ->whereExists(fn ($q) => $q->selectRaw('1')->from('ai_agent_runs as current_run')
+                    ->whereColumn('current_run.id', 's.last_run_id')->whereColumn('current_run.fingerprint', 's.fingerprint')
+                    ->whereColumn('current_run.context_version', 's.context_version'));
+            $groups->whereExists(function ($q) use ($reason) {
+                $q->selectRaw('1')->from('ai_order_decisions as d')
+                    ->whereColumn('d.agent_run_id', 's.last_run_id')->where('d.decision->reason_code', $reason);
             });
         }
         $rows = $groups->select(['g.*', 's.id as state_id', 's.last_run_id', 's.status', 's.context_version', 's.target_count', 's.covered_targets',

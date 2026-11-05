@@ -1,5 +1,13 @@
 # HeroKid AWS deployment and agent handoff
 
+## 5 November 2026 — Auto Pilot5000/day APPLIED; light dashboard PREPARED
+
+Owner explicitly raised AI allowance from2000to5000. Applied only cached `agentic.daily_limit`; consumed attempts, execution activation/unlimited admissions, `.env`, permissions and all unrelated config preserved. Source remains **63f1e908a1f1343bffed46e6fdde69d9f2436c0a**. Auto Pilot gracefully drained2345296→2391341; Codex1318728 and other workers retained, no FPM restart/reload. Authenticated UI408/5000 verified; at13:19:32UTC provider ready426/5000,7native production steps completed,0running,16not-admitted. Preserve5000in all future config work. Checkpoint **/home/ubuntu/herokid-before-autopilot-5000-20261105**. No schema/source release or business replay.
+
+New native puzzle uniqueness error13:08:07UTC raised historical failedjobs83→84; no replay/cleanup performed. Scheduler and eight services healthy; Nginx log unchanged. This is not a zero-error operational window. [Diagnostics, precise scopes, tests and recovery](autopilot-cockpit-2026-11-05.ar.md).
+
+The owner-selected light Mission Control dashboard and sidebar move are **prepared locally, NOT deployed** on `codex/autopilot-cockpit-20261105`. Read-only aggregates/filter/UI only; no execution-policy change. Before603tests/7158assertions, after606/7193 on PHP8.3 SQLite and MySQL8.4; final focused MySQL15/138, build/Pint/browser QA pass. Publication still needs approval for this new UI scope. Earlier deployment permissions do not publish it automatically.
+
 ## 5 November 2026 — complete-only books and missing-page recovery DEPLOYED
 
 Application **2911eaaa29709e088d993430eb91af09f44e045a**, base26d97037441f2c6bfe6a4152330c9ca6512572bf, published from main at approximately11:34UTC/13:34Cairo under the owner's explicit missing-page replacement instruction. [Native recovery, tests and current-order evidence](coloring-book-missing-pages-2026-11-05.md). Existing protocol6 one-page jobs preserve accepted pages and assemble a full-count PDF only after successful integrity checks. No Python worker change, whole-book replay or customer messages. New partials trigger bounded recovery; old partials need an explicit request. Authorized team-only repair after a safe pause uses the native manual fence bound to actor/control version, without resuming the checkout. Approval/current inputs, payment, pause uncertainty, uncollected results and content-refusal guards remain. AutoPilot sees recovery as active with full-book counts.

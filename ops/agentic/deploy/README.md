@@ -92,7 +92,7 @@ References: [OpenAI proxy limitations](https://learn.chatgpt.com/docs/enterprise
    `agentic.bridge_socket=/run/herokid-autopilot/decision.sock` explicitly: this
    differs from the feature's generic default `/run/herokid-agentic/decision.sock`.
    Keep provider `codex`, cycles/pass 3 and the explicitly approved daily allowance:
-   the source default is 100; current AWS override is **2000**, explicitly approved and verified November 4.
+   the source default is 100; current AWS override is **5000**, explicitly approved and verified November 5.
    Preserve it across enable/disable operations and do not reset the attempt count.
    Discover Composer packages
    from the reviewed lockfile, then validate routes/views/cache; stale package

@@ -108,3 +108,45 @@ Scoped admin enhancement; the public homepage/footer QA above is unchanged. The 
 - New database migration and scheduler/queue activation are required for deployment. No new environment variables, main changes, production deployment or real customer messages in this follow-up.
 
 Admin conversations follow-up final result: passed locally.
+
+
+---
+
+# Auto Pilot light dashboard design QA
+
+Source visual truth: `/Users/hosam/.codex/generated_images/01a19ccf-ac66-7b02-a588-6865fe14d14b/exec-fd10036a-9c6b-4c4b-86dd-fdc9eb162d38.png` (selected second option, owner-requested light revision).
+Implementation: `http://127.0.0.1:8796/admin/agentic-automation` in existing Laravel app, synthetic local fixtures; no production data copied.
+Desktop evidence: `/private/tmp/herokid-autopilot-design-20261105/implementation-desktop-final.png`.
+Mobile: `/private/tmp/herokid-autopilot-design-20261105/implementation-mobile-390.png` and `mobile-lower.png`.
+
+## Comparison and findings
+
+Source and final desktop are both1487x1058pixels, captured for the same light overview state. Both were opened together in the same comparison tool result. Initial capture1440x1024 was a composition review, not a pixel-perfect comparison. Source contains illustrative live references; implementation intentionally uses DEMO identifiers and synthetic counts. Actual production navigation, permission controls, Cairo font and logo are retained instead of reproducing ImageGen's invented icons or changing unrelated navigation spacing.
+
+First pass: P2 overly long reason labels, duplicate current-state band and four completed rows pushed the actions too far down. Fixed by short translated labels, consolidating current-state presentation, three recent completed steps, and tighter diagnostic spacing. Recaptured v2 and final; final viewed jointly with the source. No remaining actionable P0/P1/P2 findings. Intentional differences: the real current worker status replaces an unsupported always-healthy green claim; scope/freshness descriptions add height; evaluation and production counts are explicitly separate. This is the selected visual structure adapted to real product behavior, not a raster reproduction.
+
+Required surfaces:
+- Typography: real admin Cairo, 14px body/15px item heading, tabular mono metrics; readable Arabic wrapping, no truncation of reasons. Small timestamps/scope captions are secondary. Short reason labels remove oversized multi-line text from the main hierarchy.
+- Spacing: right admin sidebar, header, single KPI strip, three columns plus diagnostic rail; native collapsed logs below. Mobile stacks the columns and keeps two KPI columns. No document horizontal overflow observed.
+- Colors: existing purple sidebar and indigo actions; light neutral main surfaces, green completion, cyan waiting, amber intervention. Status is also expressed in words, not only color.
+- Assets: actual project HeroKid logo, no generated replacement assets or fake gauges; quota is a semantic progress element driven by real values. No new decorative raster assets needed.
+- Content: completed steps versus delivered orders; current native work versus AI evaluation; quota per Cairo day; coverage versus completion. No fabricated trend/accuracy/speed metrics.
+
+Mobile viewport override requested390x844; actual settled DOM viewport433x938 with screenshot481x1041 due host browser sizing/zoom. QA uses actual DOM width and its zero-overflow measurement, not an unverified390px claim. The first transitional resize frame was rejected. Stable narrow screenshot and lower-page capture verified stacked layout and accessible sidebar open/close. Desktop comparison uses matching image dimensions; no precision claim about the host zoom.
+
+Full screenshots were inspected at readable size in the joint input, including typography and diagnostic rows; no additional source crop was needed. Mobile lower screenshot separately checks diagnostic actions and logs.
+
+## Functional checks
+
+- Sidebar link directly under Dashboard, original permission gates preserved.
+- Reason drilldown:45synthetic matching checkouts, page2shows26–45; reason preserved in polling/pagination.
+- Clear filters, open execution log, memory navigation all work.
+- Dashboard polling succeeds without model calls; open audit stays stable and indicates refresh pause.
+- Desktop/narrow layout, sidebar open/close, no JS errors reported by browser console.
+- Permission/offline/dirty-context/Cairo-quota tests; SQLite/MySQL regression passes.
+
+## Follow-up polish
+
+Optional: a denser display mode for very small laptops; not required for core use. Existing admin header/sidebar styles intentionally remain unchanged.
+
+final result: passed
