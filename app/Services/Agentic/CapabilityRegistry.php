@@ -2,10 +2,12 @@
 
 namespace App\Services\Agentic;
 
+use App\Services\ProductAutomation\ProductImageAdmission;
+
 /** Capabilities describe safe proposals; they hold no executable callbacks. */
 class CapabilityRegistry
 {
-    public const VERSION = 'autopilot-control-policy-v6';
+    public const VERSION = 'autopilot-control-policy-v7';
 
     public const ACTIONS = [
         'send_order_confirmation', 'generate_identity', 'generate_product_image',
@@ -150,8 +152,17 @@ class CapabilityRegistry
         if ($unit['capability'] === 'book_interior' && ! $unit['linked_story_complete']) {
             return $result('wait', null, 'LINKED_STORY_REQUIRED');
         }
-        if ($context['automation_owned']) {
+        $image = in_array($unit['capability'], ['single_image', 'book_cover'], true);
+        if (($image ? ($context['image_automation_owned'] ?? $context['automation_owned']) : $context['automation_owned'])
+            || ($unit['native_order_work_active'] ?? false)) {
             return $result('wait', null, 'EXISTING_AUTOMATION_OWNER');
+        }
+        if ($image
+            && ($reason = ProductImageAdmission::reason($unit['order_status'], $order['printing_status'] ?? null, $order['shipping_status'] ?? null))) {
+            return $result('human_required', null, $reason);
+        }
+        if ($unit['capability'] === 'book_interior' && array_key_exists('book_admission_eligible', $unit) && ! $unit['book_admission_eligible']) {
+            return $result('human_required', null, 'BOOK_ORDER_STAGE_REQUIRES_REVIEW');
         }
         if (in_array($unit['capability'], ['story_scenes', 'book_interior'], true) && $context['global_uncertain']) {
             return $result('escalate', null, 'CODEX_POOL_UNCERTAIN');

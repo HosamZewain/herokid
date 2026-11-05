@@ -87,6 +87,7 @@ class OrderContextBuilder
                 'shipping_behavior' => OrderStatusRegistry::behavior(OrderStatusRegistry::TYPE_SHIPPING, $o->shipping_status),
                 'printing_status' => $o->printing_status, 'shipping_status' => $o->shipping_status, 'deleted' => $o->trashed(), 'active' => in_array($o->id, $activeIds, true)])->all(),
             'all_complete' => $activeIds === [], 'hold' => $held, 'automation_owned' => $ownership,
+            'image_automation_owned' => app(AutomationAssignment::class)->owns($orders->first()),
             // Matches the native first-admission row. Creating its default running
             // state is not a pause/resume edit; later versions still invalidate AI.
             'automation_control' => ['state' => $control?->state ?? 'running', 'version' => (int) ($control?->version ?? 1)],
@@ -159,7 +160,9 @@ class OrderContextBuilder
                         'production' => $this->production($run, $spec['expected_outputs']), 'output_count' => $this->outputs($order, $spec['unit_key'], $context),
                         'cover_approved' => (bool) $coverApproved, 'linked_story_ref' => $linkedOrder ? 'story:'.$linkedOrder->id : null,
                         'book_admission_eligible' => $spec['capability'] === 'book_interior' && app(BookPageService::class)->statusEligible($order),
-                        'linked_story_valid' => (bool) $linkValid, 'linked_story_complete' => ! $linkedOrder || ($linkedRun?->status === 'completed' && $spec['expected_outputs'] >= $linkedRun->scene_count),
+                        'linked_story_valid' => (bool) $linkValid, 'linked_story_complete' => (! $linkedOrder || ($linkedRun?->status === 'completed' && $spec['expected_outputs'] >= $linkedRun->scene_count))
+                            && (! $bookPages || ! $order->story_id || CodexSceneRun::where('order_id', $order->id)->where('production_kind', 'story')->where('status', 'completed')->exists()),
+                        'native_order_work_active' => $bookPages && CodexSceneRun::where('order_id', $order->id)->where('active_slot', 1)->exists(),
                         'legacy_conflict' => false,
                     ];
                 }

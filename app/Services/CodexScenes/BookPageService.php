@@ -2,6 +2,7 @@
 
 namespace App\Services\CodexScenes;
 
+use App\Exceptions\BookAdmissionException;
 use App\Exceptions\LegacyBookReviewRequired;
 use App\Models\CodexSceneRun;
 use App\Models\LegacyBookCoverApproval;
@@ -109,6 +110,9 @@ class BookPageService
 
     private function inputFailureReason(RuntimeException $e): string
     {
+        if ($e instanceof BookAdmissionException) {
+            return __('agentic.execution_reasons.'.$e->reasonCode);
+        }
         if ($e instanceof LegacyBookReviewRequired) {
             return $e->getMessage();
         }
@@ -213,13 +217,19 @@ class BookPageService
                 if (! AutomationControl::admits($item->order->checkoutGroupKey())) {
                     throw new RuntimeException('Automation paused');
                 }
-                if (! $order || AutomationHandoff::held($order->checkoutGroupKey()) || app(AutomationAssignment::class)->owns($order, false)
-                    || ! $this->statusEligible($order, $explicit)
-                    || ! $rows->contains(fn ($row) => $row->paid_amount_cents > 0 && in_array($row->payment_status, ['partially_paid', 'paid_in_full', 'paid_without_shipping'], true))
-                    || CodexSceneRun::where('order_id', $order->id)->where('active_slot', 1)->exists()
-                    || CodexSceneRun::where('production_kind', 'coloring_book')->where('order_item_id', $item->id)->exists()
-                    || ($order->story_id && ! CodexSceneRun::where('order_id', $order->id)->where('production_kind', 'story')->where('status', 'completed')->exists())) {
-                    throw new RuntimeException('Book not eligible');
+                $reason = match (true) {
+                    ! $order => 'BOOK_ORDER_UNAVAILABLE',
+                    AutomationHandoff::held($order->checkoutGroupKey()) => 'MANUAL_HOLD',
+                    app(AutomationAssignment::class)->owns($order, false) => 'EXISTING_AUTOMATION_OWNER',
+                    ! $this->statusEligible($order, $explicit) => 'BOOK_ORDER_STAGE_REQUIRES_REVIEW',
+                    ! $rows->contains(fn ($row) => $row->paid_amount_cents > 0 && in_array($row->payment_status, ['partially_paid', 'paid_in_full', 'paid_without_shipping'], true)) => 'RECORDED_PAYMENT_REQUIRED',
+                    CodexSceneRun::where('order_id', $order->id)->where('active_slot', 1)->exists() => 'BOOK_ACTIVE_WORK',
+                    CodexSceneRun::where('production_kind', 'coloring_book')->where('order_item_id', $item->id)->exists() => 'BOOK_EXISTING_ATTEMPT',
+                    $order->story_id && ! CodexSceneRun::where('order_id', $order->id)->where('production_kind', 'story')->where('status', 'completed')->exists() => 'BOOK_LINKED_STORY_REQUIRED',
+                    default => null,
+                };
+                if ($reason) {
+                    throw new BookAdmissionException($reason);
                 }
                 // Re-read after checkout locking: the HTTP preflight may hold stale
                 // item/component relations while another request edits personalization.

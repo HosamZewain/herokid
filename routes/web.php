@@ -468,6 +468,10 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', EnforceOrderAccess::class,
 
     Route::get('orders/{order}/autopilot-monitor', [AgenticAutomationController::class, 'orderActivity'])
         ->middleware('permission:orders.view')->name('orders.autopilot-monitor');
+    Route::post('orders/{order}/autopilot-executions/{execution}/recheck', [AgenticAutomationController::class, 'recheckExecution'])
+        ->whereNumber('execution')->middleware(['permission:orders.view', 'permission:orders.update', 'permission:orders.automation.control',
+            'permission:order_automation.view', 'permission:order_automation.manage', 'permission:order_automation.execute'])
+        ->name('orders.autopilot-executions.recheck');
     Route::prefix('agentic-automation')->name('agentic.')->middleware(['permission:order_automation.view', 'permission:orders.view'])->group(function (): void {
         Route::get('/', [AgenticAutomationController::class, 'index'])->name('index');
         Route::get('monitor', [AgenticAutomationController::class, 'monitor'])->name('monitor');

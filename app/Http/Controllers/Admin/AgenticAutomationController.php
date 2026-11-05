@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AiAgentRun;
 use App\Models\AiCheckoutState;
+use App\Models\AiProductionExecution;
 use App\Models\Order;
 use App\Models\Product;
 use App\Services\Agentic\ActivityMonitor;
@@ -14,6 +15,7 @@ use App\Services\Agentic\DashboardMonitor;
 use App\Services\Agentic\DecisionValidator;
 use App\Services\Agentic\ExecutionMonitor;
 use App\Services\Agentic\OrderContextBuilder;
+use App\Services\Agentic\ProductionExecutionRecovery;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -56,6 +58,14 @@ class AgenticAutomationController extends Controller
     {
         return response()->json(['html' => view('admin.orders._autopilot', compact('order'))->render()])
             ->header('Cache-Control', 'private, no-store');
+    }
+
+    public function recheckExecution(Request $request, Order $order, AiProductionExecution $execution, ProductionExecutionRecovery $recovery)
+    {
+        $input = $request->validate(['context_version' => 'required|integer|min:1']);
+        $recovery->recheck($order, $execution, $request->user(), $request, (int) $input['context_version']);
+
+        return redirect()->route('admin.orders.show', $order)->with('success', 'طُلب إعادة فحص هذه الخطوة بقرار جديد؛ النتائج والمحاولات السابقة محفوظة.');
     }
 
     public function show(Request $request, Order $order, OrderContextBuilder $builder, CapabilityRegistry $registry)

@@ -58,7 +58,10 @@ class PuzzleAutomation
                     $items = OrderItem::whereIn('order_id', $rows->pluck('id'))
                         ->whereHas('product', fn ($q) => $q->whereIn('slug', config('puzzle_automation.product_slugs')))->get();
                     foreach ($items as $item) {
-                        if (PuzzleGeneration::where('order_item_id', $item->id)->exists()) {
+                        // The event SELECT may have opened a REPEATABLE READ snapshot
+                        // before another producer committed under this checkout lock.
+                        // Use a current locking read, just like preview/Auto Pilot admission.
+                        if (PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->lockForUpdate()->first(['id'])) {
                             continue;
                         }
                         // Ignore a stale confirmation after cancellation or manual progression.
@@ -105,13 +108,23 @@ class PuzzleAutomation
             $admissionGuard();
             $previous = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->lockForUpdate()->first();
             $recovery = $previous ? app(ImageRecoveryPolicy::class)->forRun($previous) : null;
-            if (! $this->enabled() || ! $order || ! AutomationControl::admits($key) || AutomationHandoff::held($key)
-                || app(AutomationAssignment::class)->owns($order)
-                || ($previous && ! $recovery['eligible'])
-                || ! in_array($order->status, ['new_confirmed', 'costomer_confirmed'], true)
-                || ! in_array($order->printing_status, [null, 'not_started', 'not_required'], true)
-                || ! in_array($order->shipping_status, [null, 'not_ready', 'not_required'], true)) {
-                throw new RuntimeException('autopilot_existing_work_or_stage');
+            if (! $this->enabled() || ! $order) {
+                throw new RuntimeException('EXECUTOR_OR_STAGE_UNAVAILABLE');
+            }
+            if (! AutomationControl::admits($key)) {
+                throw new RuntimeException('AUTOMATION_PAUSED');
+            }
+            if (AutomationHandoff::held($key)) {
+                throw new RuntimeException('MANUAL_HOLD');
+            }
+            if (app(AutomationAssignment::class)->owns($order)) {
+                throw new RuntimeException('EXISTING_AUTOMATION_OWNER');
+            }
+            if ($previous && ! $recovery['eligible']) {
+                throw new RuntimeException('EXISTING_PRODUCT_ATTEMPT_REQUIRES_REVIEW');
+            }
+            if ($reason = ProductImageAdmission::reason($order->status, $order->printing_status, $order->shipping_status)) {
+                throw new RuntimeException($reason);
             }
             $context = app(PuzzleInputs::class)->capture($item);
             if ($context['unit_key'] !== $unitKey) {

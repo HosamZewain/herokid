@@ -1,5 +1,13 @@
 # HeroKid AWS deployment and agent handoff
 
+## 5 November 2026 — automation reliability fixes PREPARED, NOT DEPLOYED
+
+Owner requested implementation of the diagnosed automation fixes. Isolated `codex/automation-reliability-20261105` is based on revalidated Main/AWS **997e7dd8a4777bfaa01da0fcb25182be04ef872e**. Shared image-stage and native ownership eligibility, book-stage/linked-work guards, typed safe admission causes, current rejected-execution visibility and an authorized once-per-receipt recheck action are prepared. The recheck only reopens its target for a fresh normal-quota decision; it never replays an admitted executor or uncertain provider call. A dedicated synthetic MySQL regression reproduced the native puzzle duplicate-attempt race; a current locking read after the checkout lock fixes it. [Scope, tests, publication and recovery boundaries](automation-reliability-2026-11-05.ar.md).
+
+No production deployment, settings, order mutation, historical retry, paid generation, customer message or new AWS resource was performed for this task. No schema/dependency/config activation changes are included. Main/AWS still requires fresh verification before any later approved publication; existing 5000/day quota, activation, private configuration and workers must be preserved. Earlier entries below describe live releases, not this prepared branch.
+
+Final isolated PHP8.3 verification: **497 tests/4473 assertions EACH on SQLite and MySQL8.4**, with no skips; **3 real-commit MySQL race tests/16 assertions** separately. Pint/PHP lint/route and Blade compilation/lockfile build pass. Only admin CSS changes in the 16-entry manifest; all65previous assets retained. This validates prepared behavior on synthetic fixtures, not deployed customer lifecycles or resolution of the existing backlog.
+
 ## 5 November 2026 — permission-scoped admin assistant DEPLOYED
 
 Owner explicitly requested publication of the prepared read-only chat. Application **8dbd1024b431062d15b576e42aaf11978c5e8943** deployed **15:39:38–15:39:41UTC /17:39Cairo**, on verified Main/AWS **816f1730132c85688f0132ae05166b185763c589**. Current image-recovery/manual-artwork release d50ed34 was merged and preserved. The nonmodal Arabic assistant is enabled on authorized admin pages: order/queue/AutoPilot/sales/payment readers, with current actor permissions and assigned-checkout restrictions. Financial access is unchanged. No write tools, order execution, customer messages, memory changes or migrations were introduced. [Scope, tests, runtime and remaining limitations](admin-assistant-2026-11-05.ar.md).

@@ -13,7 +13,6 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderProcessRun;
 use App\Models\OrderReviewManifest;
-use App\Models\PuzzleGeneration;
 use App\Models\RoboDeskIntegrationEvent;
 use App\Services\Agentic\Providers\CodexSdkProvider;
 use App\Services\CodexScenes\BookPageService;
@@ -140,14 +139,7 @@ class ProductionExecutor
                         'executor_id' => (string) $work->id];
                 });
             } catch (\Throwable $e) {
-                if (array_key_exists($e->getMessage(), PuzzleGeneration::ERRORS)) {
-                    $result['reason_code'] = $e->getMessage();
-                }
-                if (in_array($e->getMessage(), ['EXECUTION_SCOPE_EXCLUDED', 'EXECUTION_ATTESTATION_REQUIRED', 'EXECUTION_STALE_CONTEXT',
-                    'EXECUTION_POLICY_BLOCKED', 'EXECUTION_UNIT_REQUIRED', 'EXECUTION_MESSAGE_CHANGED', 'EXECUTION_ALREADY_RECORDED', 'EXECUTION_DECISION_EXPIRED'], true)) {
-                    $result['reason_code'] = $e->getMessage();
-                }
-                // Store a safe code, never provider exceptions, source photos or payloads.
+                $result['reason_code'] = ExecutionFailureReason::from($e);
             }
             $saved = AiProductionExecution::create($result + ['decision_id' => $receipt->id,
                 'idempotency_key' => $result['status'] === 'admitted' ? $key : hash('sha256', 'not-admitted:'.$receipt->id),

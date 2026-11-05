@@ -17,6 +17,14 @@ class ExecutionMonitor
     {
         $query = AiProductionExecution::query()->when($checkoutKey, fn ($q) => $q->where('checkout_key', $checkoutKey));
         $recent = (clone $query)->latest('id')->limit(20)->get();
+        $recovery = app(ProductionExecutionRecovery::class);
+        $issues = $recovery->current($checkoutKey);
+        $requested = $recovery->requested($issues);
+        $states = AiCheckoutState::whereIn('checkout_key', $issues->pluck('checkout_key'))->get()->keyBy('checkout_key');
+        $control = DB::table('ai_production_controls')->where('id', 1)->first();
+        // Covered evaluation does not resolve a rejected admission. Keep current
+        // unresolved receipts visible even behind newer unrelated completed work.
+        $recent = $recent->merge($issues->take(20))->unique('id');
         $models = ['puzzle' => PuzzleGeneration::class, 'codex_scene' => CodexSceneRun::class,
             'confirmation' => RoboDeskIntegrationEvent::class, 'process_message' => OrderProcessRun::class];
         $outcomes = array_fill_keys(['waiting', 'running', 'production_completed', 'message_accepted', 'workflow_completed', 'failed', 'review', 'stopped', 'unknown'], 0);
@@ -56,10 +64,16 @@ class ExecutionMonitor
         }
         $orders = Order::whereIn('id', $recent->pluck('order_id'))->with('checkoutReference:id,checkout_group_key,short_reference')->get()->keyBy('id');
         $rows = $recent->map(fn ($r) => ['receipt' => $r, 'order' => $orders->get($r->order_id),
-            'current_status' => ($work[$r->executor_type ?? ''] ?? collect())->get($r->executor_id)?->status ?? null]);
+            'current_status' => ($work[$r->executor_type ?? ''] ?? collect())->get($r->executor_id)?->status ?? null,
+            'needs_intervention' => $issues->contains('id', $r->id),
+            'recheck_requested' => $requested->contains($r->id),
+            'recheck_available' => ! $control?->paused && $issues->contains('id', $r->id) && ! $requested->contains($r->id)
+                && $recovery->canRecheck($r, $states->get($r->checkout_key)),
+            'context_version' => $states->get($r->checkout_key)?->context_version]);
 
         return ['enabled' => app(ProductionExecutionSettings::class)->approved() !== null && config('agentic.observe') && config('agentic.evaluate') && config('agentic.provider') === 'codex',
-            'control' => DB::table('ai_production_controls')->where('id', 1)->first(), 'rows' => $rows,
+            'control' => $control, 'rows' => $rows,
+            'intervention_count' => $issues->count(), 'recheck_requested_count' => $requested->unique()->count(),
             'unlimited' => config('agentic.execution.unlimited') === true,
             'outcomes' => $outcomes, 'readiness' => $readiness,
             'admitted' => (clone $query)->where('status', 'admitted')->count(),
