@@ -1,5 +1,11 @@
 # HeroKid AWS deployment and agent handoff
 
+## 5 November 2026 — admin assistant read-only milestone PREPARED, NOT DEPLOYED
+
+Owner asked to begin a permission-aware admin chat. Isolated `codex/admin-assistant-20261105`, base verified Main/AWS5420bc2. [Scope, authorization, tests and activation boundaries](admin-assistant-2026-11-05.ar.md). Adds an opt-in RTL chat dock with bounded actor-scoped order/queue/AutoPilot/sales/payment readers; model only classifies the user's question, never receives retrieved customer/report facts. Current permissions and assigned checkout scope are checked before/after classification and reads; merged aliases cannot escape scope. Encrypted short-lived selectors carry no answers; chat text is excluded from audit payloads. No write tools, business execution, memory edits, migration or deployment. Existing AutoPilot5000quota/worker/runtime preserved.
+
+Separate assistant bridge entry point and Compose project required; existing decision bridge is unchanged. Local synthetic UI and confinement tests are not evidence of real subscription inference. Keep ADMIN_ASSISTANT_ENABLED=false until separately authorized deployment, dedicated auth/isolation verification and real Arabic classifier evaluation pass. Do not reuse production decision socket, copy credentials silently, refresh unrelated workers, alter existing cached config or start the optional Compose override in the production AutoPilot project.
+
 ## 5 November 2026 — light Auto Pilot Mission Control DEPLOYED
 
 Owner explicitly authorized publication. Application **59f88a6a027128c1d569922df27523a29d0b10b8**, based on verified Main/AWS **63f1e908a1f1343bffed46e6fdde69d9f2436c0a**, deployed **13:29:22UTC /15:29Cairo**. The selected light dashboard is live with read-only operational aggregates, current activity, completed native steps, waiting/intervention reasons, coverage and receipt drilldowns. Sidebar link is immediately below Dashboard with existing permissions. AI allowance remains **5000/day**, execution enabled/unlimited and current native ownership/safety gates unchanged. This supersedes the prepared-only UI status below.

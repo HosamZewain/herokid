@@ -11,6 +11,7 @@ use Symfony\Component\HttpFoundation\Response;
 class LogAdminActivity
 {
     private const SKIPPED_ROUTES = [
+        'admin.assistant.access',
         'admin.activity-logs.index',
         'admin.activity-logs.show',
         'admin.orders.photo',
@@ -34,9 +35,11 @@ class LogAdminActivity
                 subject: $subject,
                 properties: [
                     'route_parameters' => $this->routeParameters($request),
-                    'request_payload' => $request->routeIs('admin.robodesk.conversation-settings.update')
+                    'request_payload' => $request->routeIs('admin.assistant.*')
+                        ? []
+                        : ($request->routeIs('admin.robodesk.conversation-settings.update')
                         ? $request->only(['enabled', 'conversation_limit'])
-                        : $request->except(['_token', '_method']),
+                        : $request->except(['_token', '_method'])),
                     'response_status' => $response->getStatusCode(),
                 ],
                 request: $request,

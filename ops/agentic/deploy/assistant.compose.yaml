@@ -1,0 +1,9 @@
+# Optional override for a SEPARATE Compose project on the existing host.
+# Use compose.yaml + this file with -p herokid-admin-assistant, never the Auto Pilot project.
+# Provide separate AUTOPILOT_AUTH_DIR and AUTOPILOT_SOCKET_DIR values for this project.
+# No public port, host application mount, API-key fallback, or write tools.
+name: herokid-admin-assistant
+services:
+  decision:
+    command: ["node", "assistant-bridge.mjs"]
+    stop_grace_period: 35s

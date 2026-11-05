@@ -298,3 +298,5 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+import './admin-assistant';

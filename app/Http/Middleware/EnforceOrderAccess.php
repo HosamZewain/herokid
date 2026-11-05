@@ -21,6 +21,10 @@ class EnforceOrderAccess
         if (! $access->restricted()) {
             return $next($request);
         }
+        // These two read-only endpoints perform actor-scoped authorization before every read.
+        if ($request->routeIs('admin.assistant.access', 'admin.assistant.ask')) {
+            return $next($request);
+        }
         // Cross-customer consoles/reporting are all-order tools. They must not bypass
         // assigned-only mode through raw SQL, shared customer histories or shared media.
         if ($request->routeIs('admin.dashboard')) {

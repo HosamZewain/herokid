@@ -470,6 +470,7 @@
     @endisset
 
 @include('admin.orders._conversation-dock')
+@include('admin.assistant._dock')
 @stack('scripts')
 </body>
 

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminActivityLogController;
+use App\Http\Controllers\Admin\AdminAssistantController;
 use App\Http\Controllers\Admin\AdminHomeController;
 use App\Http\Controllers\Admin\AdminMediaLibraryController;
 use App\Http\Controllers\Admin\AdminMediaUploadController;
@@ -462,6 +463,9 @@ Route::middleware('auth')->group(function () {
 
 // Admin Routes
 Route::middleware(['auth', 'is_admin', 'admin_audit', EnforceOrderAccess::class, ProtectAutomationOrders::class])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('assistant/access', [AdminAssistantController::class, 'access'])->name('assistant.access');
+    Route::post('assistant/ask', [AdminAssistantController::class, 'ask'])->middleware('throttle:10,1')->name('assistant.ask');
+
     Route::get('orders/{order}/autopilot-monitor', [AgenticAutomationController::class, 'orderActivity'])
         ->middleware('permission:orders.view')->name('orders.autopilot-monitor');
     Route::prefix('agentic-automation')->name('agentic.')->middleware(['permission:order_automation.view', 'permission:orders.view'])->group(function (): void {
