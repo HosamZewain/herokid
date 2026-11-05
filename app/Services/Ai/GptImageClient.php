@@ -98,12 +98,14 @@ class GptImageClient
         } catch (GptImageException $exception) {
             throw new GptImageException($exception->getMessage(), $exception->errorCode,
                 $exception->providerRequestId ?: $requestId,
-                $submitted || $exception->providerMayHaveBilled, $exception);
+                $submitted || $exception->providerMayHaveBilled, $exception, $exception->diagnostics);
         } catch (ConnectionException $exception) {
             throw new GptImageException('انقطع الاتصال بمزود الصور دون استلام نتيجة مؤكدة.',
                 'provider_connection_failed', $requestId, $submitted, $exception);
         } catch (RequestException $exception) {
-            $providerRequestId = $this->safeId((string) $exception->response?->header('x-request-id'));
+            $failure = $requestId ? ['version' => 1, 'category' => 'result_uncertain', 'definitively_rejected' => false,
+                'http_status' => $exception->response->status()] : ImageFailureClassifier::rejected($exception->response->status(), (array) $exception->response->json());
+            $providerRequestId = $requestId ?: $this->safeId((string) $exception->response?->header('x-request-id'));
             $errorCode = $this->safeId((string) data_get($exception->response?->json(), 'error.code'));
             $errorType = $this->safeId((string) data_get($exception->response?->json(), 'error.type'));
             $errorParam = $this->safeId((string) data_get($exception->response?->json(), 'error.param'));
@@ -130,6 +132,7 @@ class GptImageClient
                 $providerRequestId ?: null,
                 true,
                 $exception,
+                $failure,
             );
         } catch (RuntimeException $exception) {
             throw new GptImageException(
@@ -195,7 +198,7 @@ class GptImageClient
             : array_slice($request->inputImages, 0, 1);
 
         return collect($images)
-            ->map(fn (string $image): array => $this->inputNormalizer->normalizeDataUri($image))
+            ->map(fn (string $image): array => $this->inputNormalizer->normalizeDataUri($image, $request->compatibleReferences))
             ->values()
             ->all();
     }

@@ -10,7 +10,7 @@ class OpenAiImageInputNormalizer
 
     private const MAX_LONG_EDGE = 4096;
 
-    public function normalizeDataUri(string $dataUri): array
+    public function normalizeDataUri(string $dataUri, bool $compatible = false): array
     {
         if (! preg_match('/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/s', $dataUri, $matches)) {
             throw new RuntimeException('OpenAI image generation requires a private image data reference.');
@@ -53,6 +53,11 @@ class OpenAiImageInputNormalizer
 
         try {
             [$targetWidth, $targetHeight] = $this->targetDimensions($width, $height);
+            if ($compatible && max($targetWidth, $targetHeight) > 2048) {
+                $scale = 2048 / max($targetWidth, $targetHeight);
+                $targetWidth = max(1, (int) round($targetWidth * $scale));
+                $targetHeight = max(1, (int) round($targetHeight * $scale));
+            }
             $target = imagecreatetruecolor($targetWidth, $targetHeight);
 
             if ($target === false) {
@@ -61,8 +66,8 @@ class OpenAiImageInputNormalizer
 
             try {
                 imagealphablending($target, false);
-                imagesavealpha($target, true);
-                $transparent = imagecolorallocatealpha($target, 255, 255, 255, 127);
+                imagesavealpha($target, ! $compatible);
+                $transparent = imagecolorallocatealpha($target, 255, 255, 255, $compatible ? 0 : 127);
                 imagefilledrectangle($target, 0, 0, $targetWidth, $targetHeight, $transparent);
                 imagealphablending($target, true);
 

@@ -24,6 +24,19 @@ class StaffPreviewInputs
             }
             $item = OrderItem::findOrFail($image['item_id']);
             $generation = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->firstOrFail();
+            if ($generation->status === 'manual_artwork') {
+                $current = app(PuzzleInputs::class)->captureCurrent($item);
+                $manual = app(ManualProductArtwork::class)->image($item, $generation, $current);
+                if ($manual !== $image) {
+                    throw new RuntimeException('Preview changed');
+                }
+                $unit = ProductProductionPrompt::forItem($item, true)->firstWhere('production_stage', 'book_interior');
+                $inputs[(string) $item->id] = ['input_fingerprint' => $current['fingerprint'],
+                    'interior_fingerprint' => app(ProcessProductReview::class)->interiorFingerprint($item),
+                    'page_count' => $unit ? (int) $unit['quantity_per_item'] : null];
+
+                continue;
+            }
             if ($generation->id !== $image['generation_id'] || $generation->status !== 'succeeded') {
                 throw new RuntimeException('Preview changed');
             }

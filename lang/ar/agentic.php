@@ -2,6 +2,15 @@
 
 return [
     'dashboard_reasons' => [
+        'IMAGE_INPUTS_REVIEW_REQUIRED' => 'بيانات المنتج أو برومبت الإنتاج ناقص؛ أكمل البيانات ثم أعد الفحص',
+        'IMAGE_RECOVERY_READY' => 'الأوتو بايلوت جاهز لفحص ومحاولة تعافٍ محدودة',
+        'IMAGE_RECOVERY_BACKOFF' => 'انتظار قصير قبل محاولة التعافي التلقائي',
+        'IMAGE_CONTENT_REVIEW_REQUIRED' => 'مزود الصور رفض المحتوى؛ مراجعة وصف التصميم والصور',
+        'IMAGE_PROVIDER_CONFIGURATION_REQUIRED' => 'مراجعة رصيد وصلاحيات وإعداد مزود الصور',
+        'IMAGE_REQUEST_REVIEW_REQUIRED' => 'مزود الصور رفض الطلب؛ راجع سبب المحاولة قبل إعادة التشغيل',
+        'IMAGE_RESULT_RECONCILIATION_REQUIRED' => 'النتيجة السابقة غير محسومة؛ يلزم التحقق قبل محاولة مدفوعة جديدة',
+        'IMAGE_RECOVERY_LIMIT_REACHED' => 'استُنفدت محاولات التعافي الآلي؛ يلزم تدخل الفريق',
+
         'OUTPUT_REVIEW_AND_STUDIO' => 'مراجعة المخرجات وتجهيزها',
         'FULFILLMENT_REQUIRES_TEAM' => 'استكمال الطباعة والتجهيز والشحن',
         'PRESERVE_OUTPUT_REVIEW_ATTEMPT' => 'مراجعة النتائج الحالية',
@@ -16,7 +25,7 @@ return [
         'production_completed' => 'مسارات إنتاج اكتملت', 'message_accepted' => 'طلبات إرسال قبلها مزوّد الرسائل',
         'workflow_completed' => 'مسارات متابعة الرسائل اكتملت', 'failed' => 'مسارات تعثرت',
         'review' => 'تحتاج مراجعة أو موافقة', 'stopped' => 'متوقفة أو ملغاة', 'unknown' => 'نتائج غير مؤكدة أو سجلات مفقودة'],
-    'executor_states' => ['queued' => 'في طابور التنفيذ', 'pending' => 'في انتظار التنفيذ', 'waiting_slot' => 'ينتظر دور التوليد', 'processing' => 'جارٍ التنفيذ', 'running' => 'جارٍ التنفيذ',
+    'executor_states' => ['manual_artwork' => 'استُخدمت معاينة رفعها الفريق؛ المحاولة السابقة محفوظة', 'queued' => 'في طابور التنفيذ', 'pending' => 'في انتظار التنفيذ', 'waiting_slot' => 'ينتظر دور التوليد', 'processing' => 'جارٍ التنفيذ', 'running' => 'جارٍ التنفيذ',
         'preparing' => 'جارٍ تجهيز المدخلات', 'sending' => 'جارٍ إرسال الرسالة', 'waiting_response' => 'ينتظر رد العميل', 'waiting_staff' => 'ينتظر قرار الموظف',
         'waiting_identity' => 'ينتظر تجهيز الهوية أو المعاينة', 'succeeded' => 'اكتملت الخطوة وسُجلت نتيجتها', 'completed' => 'اكتمل المسار',
         'blocked' => 'متوقف ويحتاج مراجعة', 'uncertain' => 'النتيجة غير مؤكدة؛ لا إعادة تلقائية', 'unknown' => 'نتيجة الإرسال غير مؤكدة', 'review' => 'المخرجات محفوظة وتحتاج مراجعة',
@@ -47,7 +56,16 @@ return [
     'actions' => ['send_order_confirmation' => 'طلب تأكيد الأوردر', 'generate_identity' => 'تجهيز هوية الطفل', 'generate_product_image' => 'تجهيز صورة المنتج',
         'start_story_scene_generation' => 'تجهيز مشاهد القصة', 'generate_book_cover' => 'تجهيز كفر الكتاب', 'generate_book_pages' => 'تجهيز صفحات الكتاب',
         'send_product_preview' => 'إرسال معاينة المنتج', 'request_customer_approval' => 'طلب موافقة العميل', 'attach_asset' => 'إرفاق الملف', 'create_human_task' => 'اقتراح مهمة لموظف'],
-    'reasons' => ['MANUAL_HOLD' => 'الطلب متوقف يدويًا؛ يمكن للمسؤول استكماله من صفحة الطلب', 'LIFECYCLE_COMPLETE' => 'انتهت دورة الطلب؛ لا يحتاج تشغيلًا جديدًا', 'UNIT_INACTIVE' => 'الوحدة غير نشطة أو تم تسليمها أو إلغاؤها',
+    'reasons' => [
+        'IMAGE_INPUTS_REVIEW_REQUIRED' => 'بيانات المنتج أو برومبت الإنتاج ناقص؛ أكمل البيانات ثم أعد الفحص',
+        'IMAGE_RECOVERY_READY' => 'الأوتو بايلوت جاهز لفحص ومحاولة تعافٍ محدودة',
+        'IMAGE_RECOVERY_BACKOFF' => 'انتظار قصير قبل محاولة التعافي التلقائي',
+        'IMAGE_CONTENT_REVIEW_REQUIRED' => 'مزود الصور رفض المحتوى؛ مراجعة وصف التصميم والصور',
+        'IMAGE_PROVIDER_CONFIGURATION_REQUIRED' => 'مراجعة رصيد وصلاحيات وإعداد مزود الصور',
+        'IMAGE_REQUEST_REVIEW_REQUIRED' => 'مزود الصور رفض الطلب؛ راجع سبب المحاولة قبل إعادة التشغيل',
+        'IMAGE_RESULT_RECONCILIATION_REQUIRED' => 'النتيجة السابقة غير محسومة؛ يلزم التحقق قبل محاولة مدفوعة جديدة',
+        'IMAGE_RECOVERY_LIMIT_REACHED' => 'استُنفدت محاولات التعافي الآلي؛ يلزم تدخل الفريق',
+        'MANUAL_HOLD' => 'الطلب متوقف يدويًا؛ يمكن للمسؤول استكماله من صفحة الطلب', 'LIFECYCLE_COMPLETE' => 'انتهت دورة الطلب؛ لا يحتاج تشغيلًا جديدًا', 'UNIT_INACTIVE' => 'الوحدة غير نشطة أو تم تسليمها أو إلغاؤها',
         'AUTOMATION_PAUSE_REQUESTED' => 'طُلب إيقاف آمن؛ انتظر تأكيد انتهاء الخطوة الجارية',
         'AUTOMATION_PAUSED' => 'الأتمتة متوقفة؛ الاستئناف يحتاج إجراء الموظف المخوّل',
         'AUTOMATION_CONTROL_UNCERTAIN' => 'لم يتأكد وضع الإيقاف؛ يلزم فحص المسؤول بدون تكرار العمل',

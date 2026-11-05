@@ -19,6 +19,7 @@ use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\BookPromptSync;
 use App\Services\Orders\LegacyBookAdmission;
+use App\Services\Orders\ManualProductArtwork;
 use App\Services\Orders\PreviewProductReuse;
 use App\Services\Orders\StaffPreviewInputs;
 use App\Services\ProductAutomation\PuzzleInputs;
@@ -63,16 +64,22 @@ class BookPageService
         $staffInputs = app(StaffPreviewInputs::class)->recorded($manifest);
         $currentCoverInputs = app(PuzzleInputs::class)->captureCurrent($item);
         $currentCover = $currentCoverInputs['fingerprint'];
+        if ($generation?->status === 'manual_artwork') {
+            $manualImage = app(ManualProductArtwork::class)->image($item, $generation, $currentCoverInputs);
+            if ($manualImage !== $image) {
+                throw new RuntimeException('Book inputs changed after approval');
+            }
+        }
         $retained = isset($image['retained_input_fingerprint']) && hash_equals($image['retained_input_fingerprint'], $currentCover)
             && $generation && PreviewProductReuse::matches($manifest->run, $item, $generation, $currentCoverInputs);
         $currentInterior = app(ProcessProductReview::class)->interiorFingerprint($item);
-        if (! $image || ! $interior || ! $generation || $generation->id !== $image['generation_id'] || $generation->status !== 'succeeded'
+        if (! $image || ! $interior || ! $generation || $generation->id !== $image['generation_id'] || ! $generation->hasArtwork()
             || (! $retained && ! hash_equals($image['input_fingerprint'], $currentCover) && ! hash_equals($staffInputs[(string) $item->id]['input_fingerprint'] ?? '', $currentCover))
             || (! app(BookPromptSync::class)->matchesInterior($item, $image['interior_fingerprint'] ?? '') && ! app(BookPromptSync::class)->matchesInterior($item, $staffInputs[(string) $item->id]['interior_fingerprint'] ?? ''))
-            || ! $generation->preview_id || $generation->preview_id !== $image['preview_id']) {
+            || ! $generation->artworkPreviewId() || $generation->artworkPreviewId() !== $image['preview_id']) {
             throw new RuntimeException('Book inputs changed after approval');
         }
-        $preview = OrderPreview::find($generation->preview_id);
+        $preview = OrderPreview::find($generation->artworkPreviewId());
         if (! $preview || $preview->productGallery?->status !== 'active' || $preview->file_path !== $image['path'] || $preview->checksum !== $image['sha256']) {
             throw new RuntimeException('Book preview revoked');
         }
@@ -82,7 +89,7 @@ class BookPageService
             throw new RuntimeException('Book pages incomplete');
         }
 
-        $references = app(BookReferences::class)->capture($item, $retained ? $currentCoverInputs['photos'] : $generation->context['photos'], $count);
+        $references = app(BookReferences::class)->capture($item, $retained ? $currentCoverInputs['photos'] : $generation->artworkContext()['photos'], $count);
 
         return ['manifest_id' => $manifest->id, 'item_id' => $item->id, 'unit_key' => $interior['unit_key'], 'page_count' => $count,
             'artwork_contract' => 'a4-interior-v1', 'references' => $references['references'], 'texts' => $references['texts'],

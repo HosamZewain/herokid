@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\CodexScenes\BookPageService;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\AutomationControl;
+use App\Services\Orders\ManualProductArtwork;
 use App\Services\Orders\OrderAccess;
 use App\Services\Orders\OrderAssignmentService;
 use App\Services\Orders\OrderAutomationAdmission;
@@ -31,6 +32,36 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class OrderWorkspaceController extends Controller
 {
+    public function manualArtwork(Request $request, Order $order, ManualProductArtwork $artwork)
+    {
+        $artwork->authorize($order, $request->user());
+        $offers = [];
+        $error = null;
+        try {
+            $offers = $artwork->offers($order);
+        } catch (ValidationException $e) {
+            $error = collect($e->errors())->flatten()->first();
+        } catch (\RuntimeException) {
+            $error = 'تعذر فحص الصور أو بيانات المنتجات؛ راجع الصور والبرومبتات الحالية.';
+        }
+
+        return view('admin.orders.manual-artwork', compact('order', 'offers', 'error'));
+    }
+
+    public function adoptManualArtwork(Request $request, Order $order, ManualProductArtwork $artwork)
+    {
+        $data = $request->validate(['confirm' => 'required|accepted', 'choices' => 'required|array|max:100', 'choices.*' => 'required|string|max:12000']);
+        try {
+            $artwork->adopt($order, $request->user(), $request, $data['choices']);
+        } catch (HttpExceptionInterface $e) {
+            throw $e;
+        } catch (\RuntimeException) {
+            throw ValidationException::withMessages(['manual_artwork' => 'تعذر ربط المعاينات؛ راجع الملفات والبيانات الحالية. لم يُعد توليد أو إرسال.']);
+        }
+
+        return redirect()->route('admin.orders.groups.show', $order)->with('success', 'تم ربط الصور المختارة واستئناف تجهيز المعاينة دون توليد جديد. موافقة العميل والدفع يظلان مطلوبين قبل الصفحات.');
+    }
+
     public function storyRecovery(Request $request, Order $order, StoryPreviewRecovery $recovery)
     {
         $recovery->authorize($order, $request->user());

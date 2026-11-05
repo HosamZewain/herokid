@@ -12,6 +12,7 @@ class GptImageException extends RuntimeException
         public readonly ?string $providerRequestId = null,
         public readonly bool $providerMayHaveBilled = false,
         ?\Throwable $previous = null,
+        public readonly array $diagnostics = [],
     ) {
         parent::__construct($safeMessage, previous: $previous);
     }

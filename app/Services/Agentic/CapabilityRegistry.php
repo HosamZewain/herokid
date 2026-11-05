@@ -5,7 +5,7 @@ namespace App\Services\Agentic;
 /** Capabilities describe safe proposals; they hold no executable callbacks. */
 class CapabilityRegistry
 {
-    public const VERSION = 'autopilot-control-policy-v5';
+    public const VERSION = 'autopilot-control-policy-v6';
 
     public const ACTIONS = [
         'send_order_confirmation', 'generate_identity', 'generate_product_image',
@@ -87,6 +87,12 @@ class CapabilityRegistry
             return $result('escalate', null, 'PAYMENT_STATE_CONFLICT');
         }
         $production = $unit['production'];
+        $recover = ($production['recovery']['eligible'] ?? false) === true;
+        if (isset($production['recovery']) && ! $recover) {
+            $reason = $production['recovery']['reason_code'];
+
+            return $result($reason === 'IMAGE_RECOVERY_BACKOFF' ? 'wait' : 'human_required', null, $reason);
+        }
         if ($production['uncertain'] || $unit['identity_status'] === 'uncertain') {
             return $result('escalate', null, 'EXTERNAL_RESULT_UNCERTAIN');
         }
@@ -108,7 +114,7 @@ class CapabilityRegistry
                 return $result('human_required', null, 'FULFILLMENT_REQUIRES_TEAM');
             }
         }
-        if ($production['attempted'] || $unit['output_count'] > 0) {
+        if (($production['attempted'] && ! $recover) || $unit['output_count'] > 0) {
             return $result('human_required', null, in_array($production['status'], ['completed', 'succeeded'], true) ? 'OUTPUT_REVIEW_AND_STUDIO' : 'PRESERVE_OUTPUT_REVIEW_ATTEMPT');
         }
         if (! $unit['supported']) {
@@ -167,7 +173,7 @@ class CapabilityRegistry
         return $result('execute', match ($unit['capability']) {
             'story_scenes' => 'start_story_scene_generation', 'book_interior' => 'generate_book_pages',
             'book_cover' => 'generate_book_cover', default => 'generate_product_image',
-        }, 'READY_FOR_PRODUCTION_PREFLIGHT');
+        }, $recover ? 'IMAGE_RECOVERY_READY' : 'READY_FOR_PRODUCTION_PREFLIGHT');
     }
 
     private function target(string $id, string $type, string $decision, ?string $action, string $reason): array
