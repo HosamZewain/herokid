@@ -6,7 +6,7 @@ import { AssistantRuntime } from './assistant-runtime.mjs';
 
 const runtime = new AssistantRuntime();
 await runtime.initialize();
-createServer(socket => {
+const server = createServer(socket => {
   let body='',bytes=0,received=false;
   const decoder=new StringDecoder('utf8');
   socket.setTimeout(30000,()=>socket.destroy()); socket.on('error',()=>{});
@@ -23,4 +23,10 @@ createServer(socket => {
       socket.end(JSON.stringify(result)+'\n');
     } catch { socket.end(JSON.stringify({error:'ASSISTANT_UNAVAILABLE'})+'\n'); }
   });
-}).listen(socketPath,async()=>chmod(socketPath,0o660));
+});
+// Drain bounded in-flight reads and release our own socket on a graceful stop.
+// Never unlink an existing socket at startup: it may belong to a live process.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.once(signal, () => server.close(() => process.exit(0)));
+}
+server.listen(socketPath,async()=>chmod(socketPath,0o660));

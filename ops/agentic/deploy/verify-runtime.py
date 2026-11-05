@@ -15,7 +15,9 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
-def verify(decision, egress, network, decision_image, egress_image, auth, socket):
+def verify(decision, egress, network, decision_image, egress_image, auth, socket, purpose="decision"):
+    require(purpose in {"decision", "assistant"}, "unknown runtime purpose")
+    entrypoint = "assistant-bridge.mjs" if purpose == "assistant" else "bridge.mjs"
     for item, expected, memory, pids in [
         (decision, decision_image, 512 * 1024**2, 128),
         (egress, egress_image, 128 * 1024**2, 32),
@@ -36,7 +38,7 @@ def verify(decision, egress, network, decision_image, egress_image, auth, socket
         require(not host.get("ExtraHosts") and not host.get("Links"), "extra network paths forbidden")
         require(not any(re.match(r"(OPENAI_API_KEY|APP_KEY|AWS_|AZURE_|CODEX_HOME)", value) for value in cfg["Env"]), "unexpected credential environment")
     require(egress["Config"]["User"] == "13:13" and not egress["Mounts"], "proxy must have no host/auth mount")
-    require(decision["Config"]["Cmd"] == ["node", "bridge.mjs"]
+    require(decision["Config"]["Cmd"] == ["node", entrypoint]
             and decision["Config"]["WorkingDir"] == "/opt/herokid-agentic"
             and decision["Config"]["Entrypoint"] == ["docker-entrypoint.sh"], "runtime entrypoint mismatch")
     require(egress["Config"]["Cmd"] == ["/usr/sbin/squid", "-N", "-f", "/etc/squid/squid.conf"]
@@ -51,7 +53,7 @@ def verify(decision, egress, network, decision_image, egress_image, auth, socket
     require(set(decision["NetworkSettings"]["Networks"]) == {network["Name"]}, "direct runtime egress forbidden")
     require(len(egress["NetworkSettings"]["Networks"]) == 2 and network["Name"] in egress["NetworkSettings"]["Networks"], "proxy network mismatch")
     require(host_tmpfs_ok(decision, 128 * 1024**2) and host_tmpfs_ok(egress, 16 * 1024**2), "bounded noexec scratch required")
-    return {"verified": True, "private_network": True, "host_gateway_absent": True, "model_ports_published": False,
+    return {"verified": True, "purpose": purpose, "private_network": True, "host_gateway_absent": True, "model_ports_published": False,
             "model_mounts": ["read_only_dedicated_auth", "private_unix_socket"], "direct_model_egress": False}
 
 
@@ -67,12 +69,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     for name in ["decision", "egress", "network", "decision-image", "egress-image", "auth-dir", "socket-dir"]:
         parser.add_argument("--" + name, required=True)
+    parser.add_argument("--purpose", choices=["decision", "assistant"], default="decision")
     args = parser.parse_args()
     require(int(docker("version", "--format", "{{json .Server.Version}}").split(".")[0]) >= 28, "Docker 28+ required")
     try:
         report = verify(docker("inspect", args.decision)[0], docker("inspect", args.egress)[0],
                         docker("network", "inspect", args.network)[0], args.decision_image, args.egress_image,
-                        args.auth_dir, args.socket_dir)
+                        args.auth_dir, args.socket_dir, args.purpose)
         print(json.dumps(report))
     except (RuntimeError, KeyError):
         raise SystemExit("Auto Pilot deployment attestation refused; keep evaluation disabled.")

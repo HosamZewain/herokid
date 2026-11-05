@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\AdminAssistant\AssistantAccess;
 use App\Services\AdminAssistant\AssistantPageContext;
+use App\Services\AdminAssistant\AssistantPlanValidator;
 use App\Services\AdminAssistant\AssistantProvider;
 use App\Services\AdminAssistant\AssistantReader;
 use App\Support\AdminActivityLogger;
@@ -12,8 +13,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 
 final class AdminAssistantController extends Controller
 {
@@ -59,15 +58,7 @@ final class AdminAssistantController extends Controller
             } catch (\Throwable) {
                 return response()->json(['message' => 'مساعد المحادثة غير متاح الآن. لم يتغيّر أي أوردر؛ المتابعة والتنفيذ الحاليان مستمران.'], 503)->header('Cache-Control', 'private, no-store');
             }
-            // Reject unrecognized contracts rather than repairing or retrying model output.
-            abort_if(array_diff(array_keys($plan), ['tool', 'reference', 'range', 'start_date', 'end_date', 'intent']), 422);
-            $plan = Validator::make($plan, [
-                'tool' => ['required', Rule::in([...$tools, 'unsupported'])],
-                'reference' => ['present', 'nullable', 'string', 'max:32', 'regex:/^(?:[1-9][0-9]*|HK[0-9]{1,2}-[0-9]+)$/'],
-                'range' => ['required', Rule::in(['page', 'today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'this_year', 'custom'])],
-                'start_date' => 'present|nullable|date_format:Y-m-d', 'end_date' => 'present|nullable|date_format:Y-m-d|after_or_equal:start_date',
-                'intent' => ['required', Rule::in(['read', 'execute'])],
-            ])->validate();
+            $plan = app(AssistantPlanValidator::class)->validate($plan, $tools);
             $user = $access->check($signature);
             if ($plan['tool'] === 'unsupported') {
                 $result = ['text' => 'السؤال خارج المصادر المتاحة لك في هذه المرحلة أو يحتاج صلاحية غير متاحة. لا أقدر أستنتج بيانات غير مسموح بها. جرّب حالة أوردر، الطلبات النشطة، أو تقريرًا متاحًا لك.', 'facts' => [], 'sources' => []];

@@ -13,7 +13,7 @@ export function mountAdminAssistant(root) {
     const headers = () => ({'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? ''});
     function clear(text = 'محادثة جديدة. اسأل عن أوردر أو تقرير متاح لك.') {
         epoch += 1; controller?.abort(); controller = null; previous = null; busy = false; submit.disabled = false;
-        messages.replaceChildren(); status.textContent = text;
+        messages.replaceChildren(); input.value = ''; status.textContent = text;
     }
     async function access() {
         const response = await fetch(root.dataset.access, {headers: headers(), cache: 'no-store', credentials: 'same-origin'});
