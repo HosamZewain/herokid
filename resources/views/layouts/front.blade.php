@@ -113,6 +113,8 @@
     {{-- Extra schema injected per-page via @push('schema') --}}
     @stack('schema')
 
+    @include('components.tiktok-pixel')
+
     @php
         $metaPixelId = request()->routeIs('account-deletion.*') ? '' : trim((string) config('services.meta_pixel.id', ''));
         $googleAnalyticsId = request()->routeIs('account-deletion.*') ? '' : trim((string) config('services.google_analytics.id', ''));

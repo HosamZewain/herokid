@@ -10,7 +10,7 @@ class MarketingAttribution
 {
     public const QUERY_KEYS = [
         'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
-        'campaign_id', 'adset_id', 'ad_id', 'campaign_name', 'adset_name', 'ad_name', 'fbclid',
+        'campaign_id', 'adset_id', 'ad_id', 'campaign_name', 'adset_name', 'ad_name', 'fbclid', 'ttclid',
     ];
 
     public const KEYS = [...self::QUERY_KEYS, 'landing_url', 'referrer'];
@@ -20,11 +20,23 @@ class MarketingAttribution
         $result = [];
         foreach (self::KEYS as $key) {
             $value = $values[$key] ?? null;
-            if (! is_string($value) || trim($value) === '' || str_contains($value, '{{')) {
+            if (! is_string($value) || trim($value) === '' || str_contains($value, '{{') || preg_match('/__\w+__/', $value)) {
                 continue;
             }
-            $limit = in_array($key, ['landing_url', 'referrer'], true) ? 2000 : ($key === 'fbclid' ? 512 : 255);
+            $limit = in_array($key, ['landing_url', 'referrer'], true) ? 2000 : (in_array($key, ['fbclid', 'ttclid'], true) ? 512 : 255);
             $result[$key] = Str::limit(trim($value), $limit, '');
+        }
+
+        // An explicit UTM wins. A TikTok click ID is paid evidence; an organic
+        // TikTok referrer alone must never be called an advertisement.
+        if (empty($result['utm_source'])) {
+            if (isset($result['ttclid'])) {
+                $result['utm_source'] = 'tiktok';
+                $result['utm_medium'] ??= 'paid_social';
+            } elseif (self::isTikTokHost(self::host($result['referrer'] ?? ''))) {
+                $result['utm_source'] = 'tiktok';
+                $result['utm_medium'] ??= 'social';
+            }
         }
 
         return $result;
@@ -52,10 +64,14 @@ class MarketingAttribution
         $meta = in_array($source, ['meta', 'facebook', 'instagram', 'fb', 'ig', 'an', 'msg', 'messenger', 'facebook_ads', 'instagram_ads'], true)
             || ($source === '' && (isset($data['fbclid']) || self::isMetaHost($referrerHost)));
         $paid = in_array($medium, ['paid_social', 'paid-social', 'paidsocial', 'paid', 'cpc', 'ppc', 'cpm', 'social_ads', 'facebook_display_ad'], true);
+        $tiktok = in_array($source, ['tiktok', 'tik_tok', 'tik-tok', 'tiktok_ads', 'tt'], true);
 
         $type = 'unknown';
         $label = 'غير معروف — لا توجد بيانات تتبع';
-        if ($meta) {
+        if ($tiktok) {
+            $type = $paid || isset($data['ttclid']) ? 'tiktok_ad' : 'tiktok';
+            $label = $type === 'tiktok_ad' ? 'إعلان تيك توك' : 'تيك توك — زيارة غير مثبتة كإعلان';
+        } elseif ($meta) {
             $type = $paid || isset($data['ad_id']) ? 'meta_ad' : 'meta';
             $label = $type === 'meta_ad' ? 'إعلان ميتا' : 'ميتا — نوع الزيارة غير مؤكد';
         } elseif ($source !== '') {
@@ -87,6 +103,7 @@ class MarketingAttribution
             'content' => $data['utm_content'] ?? null,
             'term' => $data['utm_term'] ?? null,
             'meta_click' => isset($data['fbclid']),
+            'tiktok_click' => isset($data['ttclid']),
             'referrer_host' => $referrerHost ?: null,
             // Raw URLs can contain private checkout/reset tokens. Show domains only.
             'landing_site' => $landingHost ?: null,
@@ -107,5 +124,10 @@ class MarketingAttribution
         }
 
         return false;
+    }
+
+    private static function isTikTokHost(string $host): bool
+    {
+        return $host === 'tiktok.com' || str_ends_with($host, '.tiktok.com');
     }
 }

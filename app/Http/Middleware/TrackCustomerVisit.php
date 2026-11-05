@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\Analytics\StorefrontTraffic;
 use App\Services\Cart\CartTrackingService;
 use Closure;
 use Illuminate\Http\Request;
@@ -14,6 +15,8 @@ class TrackCustomerVisit
         app(CartTrackingService::class)->captureAttribution($request);
 
         $response = $next($request);
+
+        app(StorefrontTraffic::class)->record($request, $response);
 
         $user = $request->user();
 

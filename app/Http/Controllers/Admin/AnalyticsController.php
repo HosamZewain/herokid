@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Services\Analytics\AnalyticsDateRange;
 use App\Services\Analytics\Ga4AnalyticsRepository;
+use App\Services\Analytics\StorefrontTraffic;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class AnalyticsController extends Controller
         return view('admin.analytics.index', [
             'analytics' => $analytics->dashboard($range),
             'range' => $range,
+            'localTraffic' => app(StorefrontTraffic::class)->report($range),
         ]);
     }
 

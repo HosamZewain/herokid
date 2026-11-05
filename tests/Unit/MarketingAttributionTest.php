@@ -17,6 +17,11 @@ class MarketingAttributionTest extends TestCase
     public static function sources(): array
     {
         return [
+            'TikTok click' => [['ttclid' => 'paid-click'], 'tiktok_ad'],
+            'TikTok paid UTM' => [['utm_source' => 'TikTok', 'utm_medium' => 'Paid'], 'tiktok_ad'],
+            'TikTok organic referral' => [['referrer' => 'https://www.tiktok.com/'], 'tiktok'],
+            'TikTok false host' => [['referrer' => 'https://tiktok.com.example.com/'], 'referral'],
+            'explicit source wins over click' => [['utm_source' => 'google', 'utm_medium' => 'cpc', 'ttclid' => 'stale-click'], 'campaign'],
             'meta paid UTM' => [['utm_source' => 'Facebook', 'utm_medium' => 'paid_social'], 'meta_ad'],
             'instagram ad ID' => [['utm_source' => 'ig', 'ad_id' => '123'], 'meta_ad'],
             'meta click with ad ID' => [['fbclid' => 'click', 'ad_id' => '123'], 'meta_ad'],
@@ -61,6 +66,9 @@ class MarketingAttributionTest extends TestCase
         $this->assertStringNotContainsString('secret-', $encoded);
         $this->assertSame('hero-kid.com', $result['landing_site']);
         $this->assertTrue($result['meta_click']);
+        $tiktok = MarketingAttribution::present(['ttclid' => 'secret-tiktok-click']);
+        $this->assertTrue($tiktok['tiktok_click']);
+        $this->assertStringNotContainsString('secret-tiktok-click', json_encode($tiktok));
     }
 
     public function test_manual_creation_channel_remains_available_when_marketing_is_unknown(): void

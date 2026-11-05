@@ -18,6 +18,9 @@ class CartTrackingService
     {
         $attribution = MarketingAttribution::sanitize($request->query->all());
         $attribution = array_intersect_key($attribution, array_flip(MarketingAttribution::QUERY_KEYS));
+        if ($attribution === []) {
+            $attribution = array_intersect_key(MarketingAttribution::sanitize(['referrer' => $request->headers->get('referer', '')]), array_flip(MarketingAttribution::QUERY_KEYS));
+        }
         $existing = $request->session()->get('marketing_attribution', []);
 
         if (! is_array($existing)) {
@@ -42,6 +45,7 @@ class CartTrackingService
     public function recordItemAdded(Request $request, string $cartItemKey): void
     {
         $this->safely(fn () => $this->sync($request, 'item_added', $cartItemKey));
+        $request->session()->flash('tiktok.cart_added', true);
     }
 
     public function recordItemRemoved(Request $request, string $cartItemKey, ?array $removedItem = null): void
@@ -215,6 +219,7 @@ class CartTrackingService
                 'campaign_name' => $attribution['campaign_name'] ?? null,
                 'adset_name' => $attribution['adset_name'] ?? null,
                 'fbclid' => $attribution['fbclid'] ?? null,
+                'ttclid' => $attribution['ttclid'] ?? null,
                 'landing_url' => $attribution['landing_url'] ?? null,
                 'referrer' => $attribution['referrer'] ?? null,
                 'last_activity_at' => now(),
@@ -237,6 +242,7 @@ class CartTrackingService
             'campaign_name' => $cart->campaign_name ?: ($attribution['campaign_name'] ?? null),
             'adset_name' => $cart->adset_name ?: ($attribution['adset_name'] ?? null),
             'fbclid' => $cart->fbclid ?: ($attribution['fbclid'] ?? null),
+            'ttclid' => $cart->ttclid ?: ($attribution['ttclid'] ?? null),
             'landing_url' => $cart->landing_url ?: ($attribution['landing_url'] ?? null),
             'referrer' => $cart->referrer ?: ($attribution['referrer'] ?? null),
         ];

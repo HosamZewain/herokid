@@ -45,6 +45,13 @@
         </section>
 
         <div class="space-y-6">
+            <section class="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+                <h3 class="text-base font-bold text-gray-900">TikTok Pixel</h3>
+                <label for="tiktok-pixel-id" class="mt-4 block text-sm font-bold">معرّف البيكسل</label>
+                <input id="tiktok-pixel-id" name="settings[tiktok_pixel_id]" value="{{ old('settings.tiktok_pixel_id', $s('tiktok_pixel_id', config('services.tiktok_pixel.id', ''))) }}" maxlength="32" dir="ltr" class="mt-2 w-full rounded-lg border-gray-300">
+                <p class="mt-2 text-sm text-gray-500">اكتب المعرّف فقط، بدون كود JavaScript. اتركه فارغًا لإيقافه. يعمل على صفحات التسوق العامة، ولا يعمل في الإدارة أو صفحات معاينات الأطفال.</p>
+                @error('settings.tiktok_pixel_id')<p class="mt-2 text-sm text-red-700">{{ $message }}</p>@enderror
+            </section>
 
             <section class="rounded-xl border border-indigo-100 bg-white p-6 shadow-sm" aria-labelledby="site-branding-heading">
                 <h3 id="site-branding-heading" class="text-base font-bold text-gray-900">الهوية البصرية — لوجو الموقع</h3>

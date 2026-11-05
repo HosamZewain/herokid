@@ -2,7 +2,7 @@
     @slot('header')
         <div class="text-right">
             <h2 class="text-xl font-bold text-gray-800">تحليلات الموقع</h2>
-            <p class="text-xs text-gray-500">زيارات من GA4 + سلات وتحويلات محلية من قاعدة بيانات HeroKid</p>
+            <p class="text-xs text-gray-500">زيارات المتجر محليًا + بيانات GA4 عند تفعيلها + السلات والطلبات</p>
         </div>
     @endslot
 
@@ -84,6 +84,23 @@
                 </form>
             </div>
         </div>
+
+        <section class="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm" id="local-traffic" aria-labelledby="local-traffic-heading">
+            <h3 id="local-traffic-heading" class="text-xl font-black text-gray-900">مصادر زيارات المتجر — تسجيل HeroKid</h3>
+            <p class="mt-2 text-sm leading-7 text-gray-600">{{ $range->label }} · بتوقيت القاهرة · {{ number_format($localTraffic['total']) }} جلسة زيارة. لا يشترط إضافة منتج للسلة. تنتهي الجلسة بعد 30 دقيقة دون نشاط؛ نقرة إعلان جديدة تبدأ زيارة جديدة. لا يُعدّ هذا عدد أشخاص فريدين، وتُستبعد زيارات الإدارة والروبوتات المعروفة.</p>
+            <p class="mt-2 text-sm text-gray-500">بدأ التسجيل: {{ $localTraffic['started_at'] ? \Carbon\Carbon::parse($localTraffic['started_at'], 'UTC')->timezone('Africa/Cairo')->format('Y-m-d H:i') : 'مع أول زيارة بعد تفعيل التحديث' }}. الزيارات السابقة غير مشمولة، ولا يلزم TikTok Pixel لظهور المصدر هنا.</p>
+            <div class="mt-4 overflow-x-auto">
+                <table class="w-full text-right text-sm"><thead><tr class="border-b"><th class="p-3">المصدر</th><th class="p-3">المصدر / الوسيط</th><th class="p-3">جلسات الزيارة</th></tr></thead><tbody>
+                @forelse($localTraffic['rows'] as $traffic)
+                    <tr class="border-b"><td class="p-3 font-bold">{{ $traffic['label'] }}</td><td class="p-3" dir="ltr">{{ trim(($traffic['source'] ?? '').' / '.($traffic['medium'] ?? ''), ' /') ?: 'Direct / Unknown' }}</td><td class="p-3">{{ number_format($traffic['visits']) }}</td></tr>
+                @empty
+                    <tr><td colspan="3" class="p-5 text-gray-500">لا توجد زيارات مسجلة في الفترة المختارة بعد.</td></tr>
+                @endforelse
+                </tbody></table>
+            </div>
+            <p class="mt-4 text-sm leading-7 text-gray-600">مصدر السلة والطلب يحتفظ بأول مصدر تسويقي مسجّل؛ قد يختلف عن مصدر زيارة لاحقة لنفس المتصفح. أعداد TikTok Ads قد تختلف بسبب حظر التتبع ورفض الكوكيز وطريقة احتساب الزيارات. إضافة البيكسل لا تسترجع أحداثًا سابقة.</p>
+            <a href="{{ route('admin.sales-report.index', ['range' => $range->key, 'start_date' => $range->startDate, 'end_date' => $range->endDate, 'source' => 'tiktok']) }}" class="mt-3 inline-block font-bold text-indigo-700">طلبات TikTok في تقرير المبيعات</a>
+        </section>
 
         @if($status === 'setup_required')
             <div class="rounded-3xl border border-amber-200 bg-amber-50 p-8 text-right">

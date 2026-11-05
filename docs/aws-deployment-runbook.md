@@ -1,5 +1,12 @@
 # HeroKid AWS deployment and agent handoff
 
+## 5 November 2026 — TikTok attribution and local visits PREPARED, owner-authorized
+
+Based on verified Main/AWS **5989899844f2e7b356e780445e5ff0e648cfbe37**, isolated `codex/tiktok-attribution-20261105`. Owner supplied Pixel **DBMCCQRC77UFMFQAAO30** and explicitly authorized immediate publication. [Diagnosis, scope, event semantics, tests and recovery](tiktok-tracking-2026-11-05.ar.md). Adds ttclid attribution, anonymous public-commerce visit sessions and a local-source report that works without GA4, plus the supplied browser pixel and validated settings field. Checkout creation emits PlaceAnOrder, never a new paid-payment claim. No campaign/budget changes, historical event import or external API key.
+
+PHP8.3 SQLite/MySQL8.4 each **101tests/764assertions**; Pint/route/Blade/lockfile build pass, previous hashed assets retained. Fresh backup **herokid-20261105T181905Z.sql.gz** passed gzip/localSHA and verified S3 upload. Exactly one additive migration is planned before activation: **2026_11_05_200000_add_tiktok_and_storefront_visits.php**. Only the explicit Pixel Setting and targeted site_settings invalidation are planned; preserve private cached config/.env and worker PIDs. No FPM/worker restart or shared-cache reset is required. Browser content/screenshot access is failing technically, so no authenticated browser action or TikTok dashboard change is claimed. This entry is preparation, not live verification.
+
+
 ## 5 November 2026 — automation reliability fixes DEPLOYED
 
 Owner explicitly requested publication. Application **379bb44f1dcf7fd87e5fe66e311b67f5b17147d0**, based on revalidated Main/AWS **997e7dd8a4777bfaa01da0fcb25182be04ef872e**, deployed **17:04:24–17:05:30UTC /19:04–19:05Cairo** from isolated `codex/automation-reliability-20261105`. Shared image-stage/native ownership eligibility, book-stage/linked-work guards, typed safe admission causes, current rejected-execution visibility and an authorized once-per-receipt recheck action are live. Recheck reopens only its target for a fresh normal-quota decision; it never replays an admitted executor or uncertain provider call. A dedicated synthetic MySQL regression reproduced the native puzzle duplicate-attempt race; a current locking read after the checkout lock fixes it. [Scope, tests, verification and recovery boundaries](automation-reliability-2026-11-05.ar.md).

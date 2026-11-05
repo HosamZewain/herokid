@@ -32,6 +32,7 @@ class SettingsController extends Controller
             ->toArray();
 
         $rules = [
+            'settings.tiktok_pixel_id' => ['nullable', 'string', 'regex:/^[A-Z0-9]{10,32}$/'],
             'site_logo_file' => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:5120', 'dimensions:min_width=64,min_height=24,max_width=4096,max_height=4096', 'prohibited_if:reset_site_logo,1'],
             'reset_site_logo' => ['nullable', 'boolean'],
             'settings.site_logo' => ['prohibited'],

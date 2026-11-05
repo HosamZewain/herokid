@@ -38,6 +38,14 @@
                     eventID: @json($metaPurchaseEvent['event_id']),
                 });
             }
+            if (typeof window.ttq?.track === 'function') {
+                // An order was placed; this does not assert that money was collected.
+                window.ttq.track('PlaceAnOrder', {
+                    currency: 'EGP', value: @json($metaPurchasePayload['value']),
+                    content_type: 'product', content_ids: @json($metaPurchasePayload['content_ids']),
+                    quantity: @json($metaPurchasePayload['num_items']),
+                }, { event_id: @json($metaPurchaseEvent['event_id']) });
+            }
         </script>
     @endpush
 @endif

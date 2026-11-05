@@ -46,6 +46,10 @@ return [
         'test_event_code' => env('META_TEST_EVENT_CODE'),
     ],
 
+    'tiktok_pixel' => [
+        'id' => env('TIKTOK_PIXEL_ID', ''),
+    ],
+
     'google_analytics' => [
         'id' => env('GOOGLE_ANALYTICS_ID', 'G-NBQYMB9NT2'),
     ],
