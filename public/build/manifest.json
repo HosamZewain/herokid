@@ -19,7 +19,7 @@
     ]
   },
   "resources/css/app.css": {
-    "file": "assets/app-CLUVDjxU.css",
+    "file": "assets/app-D_JPhlH_.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -61,7 +61,7 @@
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-CPPTddXD.js",
+    "file": "assets/app-B_QehA3M.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -92,7 +92,7 @@
     "isDynamicEntry": true
   },
   "resources/js/order-list-panels.js": {
-    "file": "assets/order-list-panels-D2lSVT6t.js",
+    "file": "assets/order-list-panels-xk4zAwK4.js",
     "name": "order-list-panels",
     "src": "resources/js/order-list-panels.js",
     "isDynamicEntry": true,

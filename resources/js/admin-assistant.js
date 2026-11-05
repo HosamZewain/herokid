@@ -3,6 +3,7 @@ export function mountAdminAssistant(root) {
     if (!root || root.dataset.mounted) return;
     root.dataset.mounted = 'true';
     const dialog = root.querySelector('dialog');
+    const launcher = root.querySelector('[data-assistant-open]');
     const messages = root.querySelector('[data-assistant-messages]');
     const form = root.querySelector('form');
     const input = root.querySelector('textarea');
@@ -45,13 +46,31 @@ export function mountAdminAssistant(root) {
         const time = document.createElement('small'); time.textContent = `قراءة: ${data.read_at} · لم يُنفّذ أي إجراء`;
         article.append(links, time); messages.scrollTop = messages.scrollHeight;
     }
-    root.querySelector('[data-assistant-open]').addEventListener('click', async () => {
-        dialog.showModal(); root.querySelector('[data-assistant-context]').textContent = document.querySelector('main h1, header h1')?.textContent?.trim() || 'الصفحة الحالية';
+    launcher.addEventListener('click', async () => {
+        dialog.classList.remove('is-minimized');
+        if (!dialog.open) dialog.show();
+        launcher.setAttribute('aria-expanded', 'true');
+        input.focus(); root.querySelector('[data-assistant-context]').textContent = document.querySelector('main h1, header h1')?.textContent?.trim() || 'الصفحة الحالية';
         status.textContent = 'جارٍ التحقق من صلاحياتك…';
-        if (await access()) { status.textContent = 'جاهز · قراءة وتشخيص فقط'; input.focus(); }
+        try {
+            if (await access()) status.textContent = 'جاهز · تقدر تستخدم الصفحة وتنسخ منها والمساعد مفتوح';
+        } catch { clear('تعذّر التحقق من الصلاحيات.'); }
     });
     root.querySelector('[data-assistant-close]').addEventListener('click', () => dialog.close());
-    dialog.addEventListener('close', () => clear());
+    dialog.addEventListener('close', () => {
+        dialog.classList.remove('is-minimized');
+        launcher.setAttribute('aria-expanded', 'false');
+        clear(); launcher.focus();
+    });
+    function minimize() {
+        dialog.classList.add('is-minimized');
+        launcher.setAttribute('aria-expanded', 'false');
+        launcher.focus();
+    }
+    root.querySelector('[data-assistant-minimize]').addEventListener('click', minimize);
+    dialog.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { event.preventDefault(); minimize(); }
+    });
     root.querySelector('[data-assistant-reset]').addEventListener('click', () => { clear(); input.focus(); });
     root.querySelectorAll('[data-assistant-suggest]').forEach(button => button.addEventListener('click', () => { input.value = button.dataset.assistantSuggest; input.focus(); }));
     form.addEventListener('submit', async event => {

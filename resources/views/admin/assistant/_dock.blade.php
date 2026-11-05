@@ -1,8 +1,8 @@
 @if(config('admin_assistant.enabled') && auth()->user()?->is_active && !auth()->user()?->agent_api_enabled && auth()->user()?->hasAnyPermission(['orders.view', 'sales_reports.view']))
 <div data-admin-assistant data-ask="{{ route('admin.assistant.ask') }}" data-access="{{ route('admin.assistant.access') }}">
-    <button type="button" data-assistant-open class="assistant-launch" aria-haspopup="dialog" aria-controls="admin-assistant-dialog">✦ <span>اسأل Auto Pilot</span></button>
-    <dialog id="admin-assistant-dialog" class="assistant-dialog" aria-labelledby="assistant-title" dir="rtl">
-        <header class="assistant-header"><div><span class="assistant-eyebrow">HEROKID / ASSISTANT</span><h2 id="assistant-title">مساعد Auto Pilot</h2><p>إجابة من بيانات النظام، في حدود صلاحياتك.</p></div><button type="button" data-assistant-close aria-label="إغلاق المساعد">×</button></header>
+    <button type="button" data-assistant-open class="assistant-launch" aria-haspopup="dialog" aria-expanded="false" aria-controls="admin-assistant-dialog">✦ <span>اسأل Auto Pilot</span></button>
+    <dialog id="admin-assistant-dialog" class="assistant-dialog" aria-labelledby="assistant-title" aria-modal="false" dir="rtl">
+        <header class="assistant-header"><div><span class="assistant-eyebrow">HEROKID / ASSISTANT</span><h2 id="assistant-title">مساعد Auto Pilot</h2><p>إجابة من بيانات النظام، في حدود صلاحياتك.</p></div><div class="assistant-window-actions"><button type="button" data-assistant-minimize aria-label="تصغير المساعد" title="تصغير مع الاحتفاظ بالمحادثة">−</button><button type="button" data-assistant-close aria-label="إغلاق المساعد" title="إغلاق ومسح المحادثة">×</button></div></header>
         <div class="assistant-context"><span>◉ قراءة وتشخيص</span><span data-assistant-context>الصفحة الحالية</span></div>
         <div data-assistant-messages class="assistant-messages" role="log" aria-live="polite" aria-relevant="additions text">
             <div class="assistant-welcome"><h3>نبدأ بإيه؟</h3><p>اسأل عن أوردر، سبب توقفه، أو أرقام تقرير متاح لك. كل إجابة معها مصدرها.</p></div>
