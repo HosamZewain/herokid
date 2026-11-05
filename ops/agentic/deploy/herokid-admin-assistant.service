@@ -1,0 +1,19 @@
+[Unit]
+Description=HeroKid permission-scoped read-only admin assistant
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/herokid-admin-assistant/runtime.env
+ExecStartPre=/usr/bin/systemd-tmpfiles --create /etc/tmpfiles.d/herokid-admin-assistant.conf
+ExecStart=/usr/bin/docker compose --env-file /etc/herokid-admin-assistant/runtime.env -f /etc/herokid-admin-assistant/compose.yaml -f /etc/herokid-admin-assistant/assistant.compose.yaml -p herokid-admin-assistant up -d --no-build
+ExecStartPost=/usr/bin/python3 /etc/herokid-admin-assistant/verify-runtime.py --purpose assistant --decision herokid-admin-assistant-decision-1 --egress herokid-admin-assistant-egress-1 --network herokid-admin-assistant_private --decision-image ${AUTOPILOT_DECISION_IMAGE} --egress-image ${AUTOPILOT_EGRESS_IMAGE} --auth-dir ${AUTOPILOT_AUTH_DIR} --socket-dir ${AUTOPILOT_SOCKET_DIR}
+ExecStop=/usr/bin/docker compose --env-file /etc/herokid-admin-assistant/runtime.env -f /etc/herokid-admin-assistant/compose.yaml -f /etc/herokid-admin-assistant/assistant.compose.yaml -p herokid-admin-assistant stop --timeout 35
+TimeoutStartSec=60
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target
