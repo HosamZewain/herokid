@@ -1,5 +1,6 @@
     @foreach($codexRuns as $codexRun)
         @if(isset($codexRun->book_pdf['repair_parent'])) @continue @endif
+        @if(($codexRun->book_pdf['recovery']['status'] ?? '') === 'completed') @continue @endif
         <div class="mt-4 rounded-xl border bg-white p-3">
             <p class="text-xs font-bold">{{ $codexRun->production_kind === 'coloring_book' ? 'صفحات كتاب تلوين — منتج #'.$codexRun->order_item_id : 'مشاهد القصة' }}</p><p class="text-sm font-black">{{ \App\Models\CodexSceneRun::LABELS[$codexRun->status] ?? $codexRun->status }} · {{ count($codexRun->scenes ?? []) }} / {{ $codexRun->scene_count ?? 13 }}</p>
             <p class="mt-1 text-xs text-gray-500">{{ app_datetime($codexRun->created_at,'d/m/Y h:i A') }}</p>
