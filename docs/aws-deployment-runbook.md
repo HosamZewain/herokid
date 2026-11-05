@@ -1,5 +1,9 @@
 # HeroKid AWS deployment and agent handoff
 
+## 5 November 2026 — legacy coloring-book shared covers PREPARED
+
+Owner reported HK10-635 and HK10-597/item2875. [Diagnosis, native action and safety boundaries](legacy-book-checkout-covers-2026-11-05.md). Shared checkout uploads no longer disappear from per-book selection; explicit team choice binds the exact book unit and keeps the original media/owner/gallery. Settled story-only legacy review no longer hides an independent legacy book; modern or unresolved execution remains blocked. HK10-635 still requires its cover uploaded/reviewed; HK10-597 has two selectable existing covers per book. No automatic approval/start or production POST. Isolated PHP8.3 SQLite/MySQL each160tests/1658assertions pass; final query/UI checks pending. Publication/checkpoint will be recorded separately; this section does not claim live application completion.
+
 ## 5 November 2026 — catalog/admin/Studio optimization DEPLOYED
 
 Application **7e225263225efc4f2ab72fb54b944d549dbd5328**, base **7eb834ab4f3efb0b232ef5a6b0044fd9a73aac5a**, published from main under the owner's request to implement all performance audit improvements. Isolated codex/catalog-admin-performance-20261105 preserves primary mobile/UI edits. [Implementation, tests, measurements and limitations](catalog-admin-performance-2026-11-05.md). Deferred list workflow/WhatsApp fragments preserve current scope, native forms/CSRF and links; narrow list relations and reused key counts preserve filters/ordering. Studio pauses hidden polling and prevents overlap. Encoder bounds nested CPU threads and restores the prior limit. PHP8.3 SQLite/MySQL each122tests/1740assertions,34JS tests and synthetic desktop/mobile browser checks pass; Pint/diff/build/route/Blade checks pass and old assets remain.

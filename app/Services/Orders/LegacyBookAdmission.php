@@ -54,7 +54,10 @@ class LegacyBookAdmission
             ->whereNotIn('id', LegacyBookCoverApproval::select('order_item_id'))
             ->whereNotIn('id', PuzzleGeneration::select('order_item_id'))
             ->whereNotIn('id', CodexSceneRun::whereNotNull('order_item_id')->select('order_item_id'))
-            ->whereHas('order', fn ($q) => $q->whereNotIn('checkout_group_key', OrderProcessRun::select('checkout_key')))
+            ->whereHas('order', fn ($q) => $q->whereNotIn('checkout_group_key', OrderProcessRun::query()
+                ->where(fn ($run) => $run->whereNotIn('status', ['waiting_staff', 'completed', 'cancelled'])
+                    ->orWhereDoesntHave('revision', fn ($revision) => $revision->where('definition->nodes[0]->type', 'generate_identity')))
+                ->select('checkout_key')))
             ->where(fn ($q) => $q->whereDoesntHave('productionComponents', fn ($q) => $q->where('production_stage', 'book_cover'))
                 ->orWhereHas('order.previews', fn ($q) => $q->whereHas('productGallery', fn ($q) => $q->where('status', 'active'))));
     }
@@ -78,7 +81,17 @@ class LegacyBookAdmission
         if (AutomationControl::blocked($key) || AutomationHandoff::held($key)) {
             throw new LegacyBookReviewRequired('الطلب متوقف يدويًا؛ استأنف الأوتوميشن أولًا ثم جهّز الكتاب.');
         }
-        if (OrderProcessRun::where('checkout_key', $key)->exists()
+        // The old story-only process can remain at manual review after its
+        // stories finish. It never owned this legacy product's cover/pages.
+        // Do not admit alongside a modern product workflow or unresolved work.
+        $runs = OrderProcessRun::where('checkout_key', $key)->get();
+        $busyWorkflow = $runs->contains(fn ($run) => ! in_array($run->status, ['waiting_staff', 'completed', 'cancelled'], true)
+            || ($run->revision?->definition['nodes'][0]['type'] ?? null) !== 'generate_identity'
+            || $run->identities()->where('status', '!=', 'succeeded')->exists()
+            || $run->steps()->whereNotIn('status', ['completed', 'cancelled'])
+                ->where(fn ($q) => $q->where('type', '!=', 'manual_review')->orWhere('status', '!=', 'waiting'))->exists()
+            || $run->steps()->whereHas('messageAttempts', fn ($q) => $q->whereIn('status', ['processing', 'uncertain', 'pending']))->exists());
+        if ($busyWorkflow || CodexSceneRun::where('checkout_key', $key)->where('active_slot', 1)->exists()
             || PuzzleGeneration::where('order_item_id', $item->id)->exists()
             || CodexSceneRun::where('order_item_id', $item->id)->exists()
             || app(AutomationAssignment::class)->owns($order, false)) {
@@ -163,7 +176,8 @@ class LegacyBookAdmission
             || (! empty($fields['child_name']) && trim($fields['child_name']) !== trim($order->child_name ?? ''))) {
             throw new LegacyBookReviewRequired('راجع اسم الطفل وبرومبت الصفحات وعددها؛ بيانات الكتاب غير مكتملة أو تخص طفلًا آخر.');
         }
-        if ($preview->order_id !== $order->id || $preview->productGallery?->status !== 'active'
+        if (! $preview->order || $preview->order->trashed() || $preview->order->checkoutGroupKey() !== $order->checkoutGroupKey()
+            || $preview->productGallery?->status !== 'active'
             || $preview->productGallery->checkout_group_key !== $order->checkoutGroupKey()
             || ($preview->production_unit_key && $preview->production_unit_key !== $cover['unit_key'])) {
             throw new LegacyBookReviewRequired('اختر معاينة نشطة تخص هذا الطفل وهذا الكتاب.');
@@ -201,7 +215,7 @@ class LegacyBookAdmission
         $this->ensureIdle($item);
         $prepared = $this->prepared($item);
         $offers = [];
-        foreach (OrderPreview::where('order_id', $item->order_id)->whereHas('productGallery', fn ($q) => $q->where('status', 'active'))->with('productGallery')->latest('id')->limit(100)->get() as $preview) {
+        foreach ($this->previewCandidates($prepared) as $preview) {
             try {
                 $inputs = $this->capture($prepared, $preview);
                 $offers[] = ['preview' => $preview, 'pages' => $inputs['page_count'], 'token' => Crypt::encryptString(json_encode([
@@ -214,6 +228,18 @@ class LegacyBookAdmission
         }
 
         return $offers;
+    }
+
+    /** Shared gallery uploads are unbound until the team chooses the exact book. */
+    public function previewCandidates(OrderItem $item)
+    {
+        $key = $item->order->checkoutGroupKey();
+        $unitKey = ProductProductionPrompt::forItem($item, true)->firstWhere('production_stage', 'book_cover')['unit_key'] ?? null;
+
+        return OrderPreview::whereHas('order', fn ($q) => $q->where('checkout_group_key', $key)->whereNull('deleted_at'))
+            ->whereHas('productGallery', fn ($q) => $q->where('status', 'active')->where('checkout_group_key', $key))
+            ->where(fn ($q) => $q->whereNull('production_unit_key')->when($unitKey, fn ($q) => $q->orWhere('production_unit_key', $unitKey)))
+            ->with(['productGallery', 'order'])->latest('id')->limit(100)->get();
     }
 
     public function approve(OrderItem $item, User $actor, Request $request, string $token): LegacyBookCoverApproval
@@ -257,6 +283,8 @@ class LegacyBookAdmission
             }
             $approval = LegacyBookCoverApproval::create(['order_item_id' => $item->id, 'order_preview_id' => $preview->id,
                 'user_id' => $actor->id, 'configuration_before' => $before, 'inputs' => $inputs, 'fingerprint' => $this->hash($inputs)]);
+            $cover = ProductProductionPrompt::forItem($item->fresh(), true)->firstWhere('production_stage', 'book_cover');
+            $preview->update(['production_unit_key' => $cover['unit_key'], 'checksum' => $inputs['identity_checksum']]);
             AdminActivityLogger::log('order.legacy_book_cover_approved', 'تجهيز كتاب قديم وتسجيل موافقة العميل على كفره الموجود بواسطة الفريق؛ دون توليد كفر أو إرسال رسالة.', $item->order,
                 ['item_id' => $item->id, 'preview_id' => $preview->id, 'approval_id' => $approval->id, 'page_count' => $inputs['page_count']], $actor, $request);
 

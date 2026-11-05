@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\DTOs\Ai\GptImageRequest;
 use App\DTOs\Ai\GptImageResult;
+use App\Exceptions\LegacyBookReviewRequired;
 use App\Jobs\AdvanceAutoPilotMessage;
 use App\Models\AdminActivityLog;
 use App\Models\AiProductionExecution;
@@ -1958,8 +1959,8 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertSame($preview->id, app(LegacyBookAdmission::class)->approvedInputs($item)['preview_id']);
         $other = $this->book($item->order->fresh());
         $offers = $service->offers($other);
-        $this->assertArrayNotHasKey('token', $offers[0]);
-        $this->assertArrayHasKey('error', $offers[0]);
+        $this->assertSame([], $offers);
+        $this->expectExceptionForOtherBook($other, $preview);
         $item->order->updateQuietly(['parent_notes' => 'Changed after explicit approval']);
         try {
             app(LegacyBookAdmission::class)->approvedInputs($item->fresh());
@@ -1969,6 +1970,16 @@ class ProductReviewRuntimeTest extends TestCase
         }
         $this->assertDatabaseCount('codex_scene_runs', 0);
         Http::assertNothingSent();
+    }
+
+    private function expectExceptionForOtherBook(OrderItem $item, OrderPreview $preview): void
+    {
+        try {
+            app(LegacyBookAdmission::class)->capture($item, $preview->fresh());
+            $this->fail('A cover bound to another book must never be accepted.');
+        } catch (LegacyBookReviewRequired $error) {
+            $this->assertStringContainsString('اختر معاينة', $error->getMessage());
+        }
     }
 
     public function test_manual_cover_rejects_unconfirmed_stop_and_unsolved_provider_result(): void

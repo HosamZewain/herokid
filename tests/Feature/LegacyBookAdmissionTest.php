@@ -5,8 +5,12 @@ namespace Tests\Feature;
 use App\Models\CodexSceneRun;
 use App\Models\LegacyBookCoverApproval;
 use App\Models\Order;
+use App\Models\OrderAutomation;
+use App\Models\OrderAutomationRevision;
 use App\Models\OrderItem;
 use App\Models\OrderPreview;
+use App\Models\OrderProcessEvent;
+use App\Models\OrderProcessRun;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\User;
@@ -90,6 +94,94 @@ class LegacyBookAdmissionTest extends TestCase
         $this->assertArrayHasKey('token', $offers[0], json_encode($offers));
 
         return $service->approve($item, $this->actor, Request::create('/'), $offers[0]['token']);
+    }
+
+    public function test_checkout_gallery_cover_can_be_selected_for_a_child_book_without_reuploading(): void
+    {
+        $item = $this->fixture(20);
+        $representative = $item->order->replicate();
+        $representative->order_number = 'SYN-'.Str::random(8);
+        $representative->child_name = 'طفل آخر في نفس الطلب';
+        $representative->save();
+        $preview = OrderPreview::sole();
+        $preview->update(['order_id' => $representative->id]);
+        $before = $preview->fresh()->getRawOriginal();
+        $files = Storage::disk('s3_private')->allFiles();
+        $offers = app(LegacyBookAdmission::class)->offers($item);
+        $this->assertCount(1, $offers);
+        $this->assertArrayHasKey('token', $offers[0]);
+        $this->assertSame($before, $preview->fresh()->getRawOriginal());
+        $this->get(route('admin.orders.workspace.legacy-book', [$representative, $item]))
+            ->assertOk()->assertSee('صورة مرفوعة على عملية الشراء')->assertSee($item->order->child_name);
+        $approval = $this->approve($item);
+        $this->assertSame($item->order_id, $approval->inputs['child']['id']);
+        $this->assertSame($preview->id, $approval->order_preview_id);
+        $this->assertNotNull($preview->fresh()->production_unit_key);
+        $this->assertSame($representative->id, $preview->fresh()->order_id);
+        $this->assertSame($files, Storage::disk('s3_private')->allFiles());
+        $this->assertNull(app(BookPageService::class)->admissionReason($item->fresh()));
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_gallery_selection_rejects_other_checkout_bound_unit_and_changed_checkout(): void
+    {
+        $item = $this->fixture(20);
+        $other = $this->fixture(20);
+        $service = app(LegacyBookAdmission::class);
+        $this->assertCount(1, $service->offers($item));
+        $preview = OrderPreview::where('order_id', $item->order_id)->sole();
+        $preview->update(['production_unit_key' => 'product:'.$other->id]);
+        $this->assertCount(0, $service->offers($item));
+        $preview->update(['production_unit_key' => null]);
+        $token = $service->offers($item)[0]['token'];
+        $preview->update(['order_id' => $other->order_id]);
+        $this->post(route('admin.orders.workspace.legacy-book-approve', [$item->order, $item]), ['confirm' => 1, 'preview_token' => $token])
+            ->assertSessionHasErrors('legacy_book');
+        $this->assertDatabaseCount('legacy_book_cover_approvals', 0);
+    }
+
+    public function test_settled_story_only_review_does_not_hide_legacy_book_and_running_work_still_blocks(): void
+    {
+        $item = $this->fixture(20);
+        $definition = ['nodes' => [['id' => 'generate', 'type' => 'generate_identity']]];
+        $flow = OrderAutomation::create(['name' => 'Synthetic story flow', 'draft' => $definition]);
+        $revision = OrderAutomationRevision::create(['automation_id' => $flow->id, 'definition' => $definition,
+            'checksum' => hash('sha256', json_encode($definition)), 'published_by' => $this->actor->id, 'created_at' => now()]);
+        $event = OrderProcessEvent::create(['event_key' => Str::uuid(), 'type' => 'status_entered', 'order_id' => $item->order_id,
+            'checkout_key' => $item->order->checkoutGroupKey(), 'data' => [], 'status' => 'processed']);
+        $run = OrderProcessRun::create(['automation_id' => $flow->id, 'revision_id' => $revision->id, 'event_id' => $event->id,
+            'order_id' => $item->order_id, 'checkout_key' => $item->order->checkoutGroupKey(), 'account_key' => 'primary',
+            'phone_hash' => hash('sha256', 'synthetic'), 'enrollment_key' => hash('sha256', 'synthetic'), 'status' => 'waiting_staff', 'node_id' => 'review', 'context' => []]);
+        $step = $run->steps()->create(['node_id' => 'review', 'type' => 'manual_review', 'status' => 'waiting']);
+        $service = app(LegacyBookAdmission::class);
+        $this->assertTrue($service->candidate($item));
+        $revision->update(['definition' => ['nodes' => [['id' => 'generate', 'type' => 'generate_previews']]]]);
+        $this->assertFalse($service->candidate($item));
+        $revision->update(['definition' => $definition]);
+        $run->update(['status' => 'running']);
+        $this->assertFalse($service->candidate($item));
+        $run->update(['status' => 'waiting_staff']);
+        $token = $service->offers($item)[0]['token'];
+        $step->update(['type' => 'whatsapp', 'status' => 'processing']);
+        $this->post(route('admin.orders.workspace.legacy-book-approve', [$item->order, $item]), ['confirm' => 1, 'preview_token' => $token])->assertSessionHasErrors('legacy_book');
+        $this->assertDatabaseCount('legacy_book_cover_approvals', 0);
+        $step->update(['type' => 'manual_review', 'status' => 'waiting']);
+        $before = $run->fresh()->getRawOriginal();
+        $this->approve($item);
+        $this->assertSame($before, $run->fresh()->getRawOriginal());
+        $this->assertNull(app(BookPageService::class)->admissionReason($item->fresh()));
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
+    public function test_empty_gallery_gives_a_working_link_to_the_actual_upload_section(): void
+    {
+        $item = $this->fixture();
+        OrderPreview::query()->delete();
+        $this->get(route('admin.orders.workspace.legacy-book', [$item->order, $item]))->assertOk()
+            ->assertSee('فتح مكان رفع الكفر')->assertSee('#product-customer-preview', false);
     }
 
     public function test_existing_cover_and_forty_pages_can_be_explicitly_adopted_then_started_once(): void

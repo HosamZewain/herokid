@@ -80,18 +80,17 @@ class ManualBookCoverApproval
         $service = app(LegacyBookAdmission::class);
         $state = $this->state($item);
 
-        return OrderPreview::where('order_id', $item->order_id)->whereHas('productGallery', fn ($q) => $q->where('status', 'active'))
-            ->with('productGallery')->latest('id')->limit(100)->get()->map(function ($preview) use ($item, $service, $state) {
-                try {
-                    $inputs = $service->capture($item, $preview);
+        return $service->previewCandidates($item)->map(function ($preview) use ($item, $service, $state) {
+            try {
+                $inputs = $service->capture($item, $preview);
 
-                    return ['preview' => $preview, 'pages' => $inputs['page_count'], 'token' => Crypt::encryptString(json_encode([
-                        'purpose' => 'manual_replacement', 'item' => $item->id, 'preview' => $preview->id,
-                        'fingerprint' => $service->hash($inputs), 'state' => $state], JSON_THROW_ON_ERROR))];
-                } catch (RuntimeException $error) {
-                    return ['preview' => $preview, 'error' => LegacyBookAdmission::message($error)];
-                }
-            })->all();
+                return ['preview' => $preview, 'pages' => $inputs['page_count'], 'token' => Crypt::encryptString(json_encode([
+                    'purpose' => 'manual_replacement', 'item' => $item->id, 'preview' => $preview->id,
+                    'fingerprint' => $service->hash($inputs), 'state' => $state], JSON_THROW_ON_ERROR))];
+            } catch (RuntimeException $error) {
+                return ['preview' => $preview, 'error' => LegacyBookAdmission::message($error)];
+            }
+        })->all();
     }
 
     public function approve(OrderItem $item, User $actor, Request $request, string $token): LegacyBookCoverApproval
