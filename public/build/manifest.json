@@ -61,7 +61,7 @@
     "isEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-uBgBvOzJ.js",
+    "file": "assets/app-D2wqLlxx.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -71,6 +71,7 @@
       "resources/js/order-process-builder.js",
       "resources/js/studio-settings-editor.js",
       "resources/js/admin-conversations.js",
+      "resources/js/order-list-panels.js",
       "resources/js/booklet-reader.js",
       "resources/js/scene-reader.js"
     ]
@@ -89,6 +90,15 @@
     "name": "dashboard-month-comparison",
     "src": "resources/js/dashboard-month-comparison.js",
     "isDynamicEntry": true
+  },
+  "resources/js/order-list-panels.js": {
+    "file": "assets/order-list-panels-CE4A24XH.js",
+    "name": "order-list-panels",
+    "src": "resources/js/order-list-panels.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/app.js"
+    ]
   },
   "resources/js/order-process-builder.js": {
     "file": "assets/order-process-builder-_j-rX1J2.js",

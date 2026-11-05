@@ -94,6 +94,10 @@ class AdminOrderAssignmentTest extends TestCase
         $this->actingAs($employee)->get(route('admin.orders.index'))->assertOk()->assertDontSee('SECRET-ORDER')->assertViewHas('groups', fn ($g) => $g->total() === 1)->assertViewHas('workspaceCounts', fn ($c) => $c['all'] === 1);
         $this->get(route('admin.orders.index', ['q' => 'SECRET-ORDER']))->assertOk()->assertViewHas('groups', fn ($g) => $g->total() === 0);
         $this->get(route('admin.orders.groups.show', $foreign))->assertNotFound();
+        foreach (['workflow', 'messages'] as $panel) {
+            $this->getJson(route('admin.orders.groups.list-panel', [$mine, $panel]))->assertOk();
+            $this->getJson(route('admin.orders.groups.list-panel', [$foreign, $panel]))->assertNotFound();
+        }
         $this->patch(route('admin.orders.update', $foreign), ['status' => 'new_confirmed'])->assertNotFound();
         $this->get(route('admin.orders.photo', [$foreign, 0]))->assertNotFound();
         $attachment = OrderAttachment::create(['order_id' => $foreign->id, 'disk' => 's3_private', 'path' => 'synthetic/secret.png', 'original_name' => 'secret.png', 'mime_type' => 'image/png', 'size' => 10]);
@@ -106,6 +110,9 @@ class AdminOrderAssignmentTest extends TestCase
         // Transfer while employee keeps a stale page open revokes every subsequent call.
         $this->assignAs($manager, $mine, $manager, 1, $employee->id)->assertRedirect();
         $this->actingAs($employee)->get(route('admin.orders.groups.show', $sibling))->assertNotFound();
+        foreach (['workflow', 'messages'] as $panel) {
+            $this->getJson(route('admin.orders.groups.list-panel', [$sibling, $panel]))->assertNotFound();
+        }
         $this->getJson(route('admin.orders.workspace.progress', ['visible' => [$mine->id]]))->assertOk()->assertJsonCount(0, 'rows');
         $this->actingAs($manager)->get(route('admin.orders.index'))->assertOk()->assertViewHas('groups', fn ($g) => $g->total() === 2);
     }

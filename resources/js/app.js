@@ -1,3 +1,5 @@
+import { createVisibilityPoller } from './visibility-poller';
+import { initializeOrderWorkflow } from './order-workflow';
 import './bootstrap';
 import { initializeOrderStatusFilters } from './order-status-filters';
 import { initializeAdminFileUploads } from './admin-file-uploads';
@@ -15,6 +17,8 @@ import { initializeHomePackageCarousels } from './home-package-carousel';
 import { initializeOrderQuickEdit } from './order-quick-edit';
 import { initializeAdminOrderForms } from './admin-order-form';
 import { initializeCheckoutDraft, clearCompletedCheckoutDrafts } from './checkout-form-draft';
+
+window.HeroKidVisibilityPoller = createVisibilityPoller;
 
 window.HeroKidCheckoutDraft = Object.freeze({ initialize: initializeCheckoutDraft });
 
@@ -48,6 +52,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     clearCompletedCheckoutDrafts();
     initializeOrderStatusFilters();
+    initializeOrderWorkflow();
+    if (document.querySelector('[data-order-list-panel]')) {
+        import('./order-list-panels').then(({ initializeOrderListPanels }) => initializeOrderListPanels());
+    }
     initializeAdminFileUploads();
     initializeOrderQuickEdit();
     initializeAdminOrderForms();

@@ -36,11 +36,12 @@ class AdminOrderWhatsAppMessagesTest extends TestCase
             'catalog_type' => 'products',
         ]));
 
-        $index->assertOk()
-            ->assertSee('مراسلة عامة')
-            ->assertSee('إرسال معاينة للعميل')
-            ->assertSee('إرسال بيانات الدفع')
-            ->assertSee(rawurlencode('مرحباً، بخصوص طلبك '.$order->checkoutReference->short_reference), false);
+        $index->assertOk()->assertSee('data-order-list-panel', false)->assertDontSee('https://wa.me/', false);
+        $messages = $this->getJson(route('admin.orders.groups.list-panel', [$order, 'messages']))->assertOk()->json('html');
+        $this->assertStringContainsString('مراسلة عامة', $messages);
+        $this->assertStringContainsString('إرسال معاينة للعميل', $messages);
+        $this->assertStringContainsString('إرسال بيانات الدفع', $messages);
+        $this->assertStringContainsString(rawurlencode('مرحباً، بخصوص طلبك '.$order->checkoutReference->short_reference), $messages);
 
         $this->actingAs($this->admin)
             ->get(route('admin.orders.groups.show', $order))

@@ -38,7 +38,9 @@ class PublicImageOptimizationTest extends TestCase
     {
         $path = $this->image();
         $original = Storage::disk('public')->get($path);
+        $threads = \Imagick::getResourceLimit(\Imagick::RESOURCETYPE_THREAD);
         $this->assertTrue(app(PublicCatalogImageOptimizer::class)->generate('public', $path));
+        $this->assertSame($threads, \Imagick::getResourceLimit(\Imagick::RESOURCETYPE_THREAD));
         $record = PublicImageVariant::sole();
         $this->assertSame(hash('sha256', $original), $record->source_hash);
         $this->assertSame($original, Storage::disk('public')->get($path));

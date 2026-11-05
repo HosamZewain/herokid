@@ -31,6 +31,19 @@ use Illuminate\Validation\ValidationException;
 
 class OrderGroupController extends Controller
 {
+    public function listPanel(Request $request, int $representative, string $panel, AdminOrderGroupService $groups, OrderWhatsAppMessageService $whatsapp)
+    {
+        abort_unless(in_array($panel, ['workflow', 'messages'], true), 404);
+        abort_if($panel === 'workflow' && ! $request->user()->hasPermission('orders.update'), 403);
+        $group = $groups->findListGroup($representative);
+        abort_if($group['trashed'], 404);
+        $view = $panel === 'workflow' ? 'admin.orders._workflow-status-panel' : 'admin.orders._whatsapp-message-actions';
+        $messages = $panel === 'messages' ? $whatsapp->messagesForGroup($group) : [];
+
+        return response()->json(['html' => view($view, ['group' => $group, 'whatsappMessages' => $messages])->render()])
+            ->header('Cache-Control', 'private, no-store');
+    }
+
     public function show(
         int $representative,
         AdminOrderGroupService $groups,

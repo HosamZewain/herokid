@@ -418,9 +418,9 @@
                             <div class="grid grid-cols-2 gap-2">
                                 @include('admin.orders._conversation-button', ['conversationOrderId' => $group['representative_id'], 'conversationCustomerName' => $group['customer_name'], 'conversationTrashed' => $group['trashed'], 'conversationCheckoutKey' => $group['key']])
                                 <a href="{{ $detailsUrl }}" class="rounded-xl bg-indigo-600 px-3 py-2.5 text-center text-xs font-black text-white">عرض وإدارة</a>
-                                @if(!empty($group['whatsapp_messages']) && !$group['trashed'])
+                                @if($group['phone'] && !$group['trashed'])
                                     <div class="col-span-2 rounded-2xl border border-green-100 bg-green-50 p-2">
-                                        @include('admin.orders._whatsapp-message-actions', ['whatsappMessages' => $group['whatsapp_messages']])
+                                        @include('admin.orders._list-messages', ['group' => $group])
                                     </div>
                                 @elseif($group['trashed'] && auth()->user()->hasPermission('orders.delete'))
                                     <form method="POST" action="{{ route('admin.orders.groups.restore', $group['representative_id']) }}" onsubmit="return confirm('استعادة عملية الشراء وكل قصصها؟')">
@@ -438,9 +438,9 @@
                                         @include('admin.orders._automation-summary', ['group' => $group])
                             @can('orders.update')
                                 @if(!$group['trashed'])
-                                    <details>
+                                    <details data-order-list-details>
                                         <summary class="cursor-pointer rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-center text-xs font-black text-indigo-700">تغيير الحالات الأربع</summary>
-                                        <div class="mt-3">@include('admin.orders._workflow-status-panel', ['group' => $group])</div>
+                                        <div class="mt-3">@include('admin.orders._list-panel', ['group' => $group, 'panel' => 'workflow'])</div>
                                     </details>
                                 @endif
                             @endcan
@@ -511,8 +511,8 @@
                                                     <button type="button" data-workflow-toggle="{{ $group['representative_id'] }}" title="تغيير الحالات" aria-label="تغيير الحالات" class="grid h-8 w-8 place-items-center rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100"><svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg></button>
                                                 @endif
                                             @endcan
-                                            @if(!empty($group['whatsapp_messages']) && !$group['trashed'])
-                                                @include('admin.orders._whatsapp-message-actions', ['whatsappMessages' => $group['whatsapp_messages'], 'compact' => true])
+                                            @if($group['phone'] && !$group['trashed'])
+                                                @include('admin.orders._list-messages', ['group' => $group])
                                             @endif
                                             @can('orders.delete')
                                                 @if($group['trashed'])
@@ -591,7 +591,7 @@
                                 @can('orders.update')
                                     @if(!$group['trashed'])
                                         <tr class="hidden bg-indigo-50/40" data-workflow-panel-row="{{ $group['representative_id'] }}">
-                                            <td colspan="{{ $showBulkActions ? 10 : 9 }}" class="p-4">@include('admin.orders._workflow-status-panel', ['group' => $group])</td>
+                                            <td colspan="{{ $showBulkActions ? 10 : 9 }}" class="p-4">@include('admin.orders._list-panel', ['group' => $group, 'panel' => 'workflow'])</td>
                                         </tr>
                                     @endif
                                 @endcan

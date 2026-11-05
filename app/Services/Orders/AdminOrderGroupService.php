@@ -56,6 +56,18 @@ class AdminOrderGroupService
         'items.variant:id,product_id,name_ar,sku,stock_quantity',
     ];
 
+    /** List cards never need full story text, production prompts or preview tokens. */
+    private const LIST_RELATIONS = [
+        'user:id,name,role', 'createdByAdmin:id,name', 'paymentUpdatedBy:id,name', 'marketingCart',
+        'groupAssignment.assignee:id,name',
+        'checkoutReference:id,checkout_group_key,short_reference,reference_month,monthly_sequence',
+        'checkoutReference.tags:id,name,normalized_name',
+        'submittedServiceRatings:id,order_id,metadata,decided_at',
+        'story:id,title,price',
+        'items:id,order_id,item_type,story_id,product_id,product_variant_id,title,quantity,total_price_cents',
+        'items.product:id,name_ar', 'items.variant:id,product_id,name_ar,sku',
+    ];
+
     private const DETAIL_RELATIONS = [
         ...self::INDEX_RELATIONS,
         'bookletPreview.currentVersion:id,booklet_preview_id,created_at',
@@ -86,10 +98,11 @@ class AdminOrderGroupService
         $includeDeleted = $this->includeDeleted($request, $lifecycle);
         $query = $this->groupedFilteredQuery($request, $includeDeleted, $catalogType, $lifecycle);
 
-        $groups = $this->groupPage($query, $request);
+        $allKeys = (clone $query)->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
+        $groups = $this->groupPage($query, $request, $allKeys->count());
 
         $keys = $groups->getCollection()->pluck('checkout_group_key');
-        $orders = $this->ordersForKeys($keys, $includeDeleted)->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
+        $orders = $this->ordersForKeys($keys, $includeDeleted, false, true)->groupBy(fn (Order $order): string => $order->checkoutGroupKey());
 
         $groups->setCollection($groups->getCollection()
             ->map(fn ($group): array => $this->present($orders->get($group->checkout_group_key, collect()), $includeDeleted))
@@ -98,12 +111,12 @@ class AdminOrderGroupService
 
         $summaries = app(OrderAutomationSummary::class)->forKeys($keys);
         $groups->setCollection($groups->getCollection()->map(fn ($group) => $group + ['automation_summary' => $summaries[$group['key']] ?? null]));
-        $workspaceCounts = $this->workspaceCounts($request, $includeDeleted, $catalogType, $lifecycle);
+        $workspaceCounts = $this->workspaceCounts($request, $includeDeleted, $catalogType, $lifecycle, $allKeys);
         $stats = null;
 
         // Share the resolved checkout keys across cards: repeating nested catalog
         // and lifecycle predicates inside each aggregate is expensive on MySQL.
-        $allKeys = (clone $query)->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
+
         if ($includeStatistics) {
             $stats = app(OrderFinancialStatistics::class)->summarize($allKeys, $includeDeleted);
         }
@@ -150,7 +163,8 @@ class AdminOrderGroupService
         $lifecycle = $this->lifecycle($request);
         $includeDeleted = $this->includeDeleted($request, $lifecycle);
         $query = $this->groupedFilteredQuery($request, $includeDeleted, $catalogType, $lifecycle);
-        $page = $this->groupPage($query, $request);
+        $matchingKeys = (clone $query)->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
+        $page = $this->groupPage($query, $request, $matchingKeys->count());
         $keys = $page->getCollection()->pluck('checkout_group_key');
         // A status/search filter can match a later child. The displayed card is
         // still represented by the first live sibling, including archived views.
@@ -160,10 +174,10 @@ class AdminOrderGroupService
             ->groupBy('checkout_group_key')->pluck('representative_id', 'checkout_group_key');
 
         return ['ids' => $keys->map(fn ($key) => (int) $representatives[$key])->values(), 'total' => $page->total(),
-            'counts' => $this->workspaceCounts($request, $includeDeleted, $catalogType, $lifecycle)];
+            'counts' => $this->workspaceCounts($request, $includeDeleted, $catalogType, $lifecycle, $matchingKeys)];
     }
 
-    private function groupPage(Builder $query, Request $request): LengthAwarePaginator
+    private function groupPage(Builder $query, Request $request, int $total): LengthAwarePaginator
     {
         $perPage = in_array($request->integer('per_page', 25), [25, 50, 100], true)
             ? $request->integer('per_page', 25)
@@ -175,15 +189,20 @@ class AdminOrderGroupService
 
         $this->applyGroupOrdering($groups, $request);
 
-        return $groups->paginate($perPage)
-            ->withQueryString();
+        $page = max(1, LengthAwarePaginator::resolveCurrentPage());
+
+        return (new LengthAwarePaginator($groups->forPage($page, $perPage)->get(), $total, $perPage, $page, [
+            'path' => LengthAwarePaginator::resolveCurrentPath(),
+        ]))->withQueryString();
 
     }
 
-    private function workspaceCounts(Request $request, bool $includeDeleted, string $catalogType, string $lifecycle): array
+    private function workspaceCounts(Request $request, bool $includeDeleted, string $catalogType, string $lifecycle, Collection $matchingKeys): array
     {
         $countRequest = $request->duplicate($request->except(['workspace', 'page']));
-        $workspaceKeys = $this->groupedFilteredQuery($countRequest, $includeDeleted, $catalogType, $lifecycle)->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
+        $workspaceKeys = in_array($request->query('workspace', 'all'), ['', 'all'], true)
+            ? $matchingKeys
+            : $this->groupedFilteredQuery($countRequest, $includeDeleted, $catalogType, $lifecycle)->select('checkout_group_key')->distinct()->pluck('checkout_group_key');
         $workspaceStates = collect(app(OrderAutomationSummary::class)->forKeys($workspaceKeys));
 
         return ['all' => $workspaceStates->count(), 'automation' => $workspaceStates->where('tracking', true)->count(), 'team' => $workspaceStates->where('tracking', false)->count(), 'attention' => $workspaceStates->where('state', 'intervention')->count()];
@@ -371,6 +390,15 @@ class AdminOrderGroupService
                 }
             }
         })];
+    }
+
+    public function findListGroup(int $representativeId): array
+    {
+        $order = Order::withTrashed()->findOrFail($representativeId);
+        app(OrderAccess::class)->assert($order);
+        $orders = $this->ordersForKeys(collect([$order->checkoutGroupKey()]), true, false, true);
+
+        return $this->present($orders, $orders->every->trashed());
     }
 
     public function findByRepresentative(int $representativeId): array
@@ -1087,7 +1115,7 @@ class AdminOrderGroupService
         return array_values(array_unique($values));
     }
 
-    private function ordersForKeys(Collection $keys, bool $includeDeleted, bool $report = false): Collection
+    private function ordersForKeys(Collection $keys, bool $includeDeleted, bool $report = false, bool $list = false): Collection
     {
         if ($keys->isEmpty()) {
             return collect();
@@ -1105,7 +1133,7 @@ class AdminOrderGroupService
                 'discount_cents', 'discount_reason', 'payment_method', 'delivery_details', 'order_source',
                 'source_notes', 'payment_updated_at', 'created_at', 'updated_at', 'deleted_at',
             ]))
-            ->with($report ? self::REPORT_RELATIONS : self::INDEX_RELATIONS)
+            ->with($report ? self::REPORT_RELATIONS : ($list ? self::LIST_RELATIONS : self::INDEX_RELATIONS))
             ->whereIn('checkout_group_key', $keys)
             ->orderBy('id')
             ->get()->each(fn (Order $order) => $order->setAttribute(

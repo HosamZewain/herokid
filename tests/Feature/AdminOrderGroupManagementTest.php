@@ -998,9 +998,13 @@ class AdminOrderGroupManagementTest extends TestCase
             ->assertSee('حالة الطباعة')
             ->assertSee('حالة الشحن')
             ->assertSee('تغيير الحالات', false)
-            ->assertSee(route('admin.orders.groups.workflow-statuses', $first->id), false)
-            ->assertSee('https://wa.me/201000000000', false)
+            ->assertSee(route('admin.orders.groups.list-panel', [$first->id, 'workflow']), false)
+            ->assertSee(route('admin.orders.groups.list-panel', [$first->id, 'messages']), false)
+            ->assertDontSee('data-workflow-status-form', false)
             ->assertDontSee('حذف العملية');
+
+        $html = $this->getJson(route('admin.orders.groups.list-panel', [$first->id, 'messages']))->assertOk()->json('html');
+        $this->assertStringContainsString('https://wa.me/201000000000', $html);
 
         $this->assertSame('201111822277', Phone::forWhatsApp('01111822277'));
         $this->assertSame('201111822277', Phone::forWhatsApp('201111822277'));

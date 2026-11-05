@@ -13,7 +13,9 @@ class PublicImageEncoder
             throw new RuntimeException('Public image exceeds the safe processing size.');
         }
         $image = new Imagick;
+        $threads = Imagick::getResourceLimit(Imagick::RESOURCETYPE_THREAD);
         try {
+            Imagick::setResourceLimit(Imagick::RESOURCETYPE_THREAD, 1);
             $image->pingImage($source);
             if ($image->getNumberImages() !== 1 || ! in_array(strtoupper($image->getImageFormat()), ['JPEG', 'PNG', 'WEBP'], true)) {
                 throw new RuntimeException('Animated or unsupported source: keep the original.');
@@ -49,6 +51,7 @@ class PublicImageEncoder
             return $variants;
         } finally {
             $image->clear();
+            Imagick::setResourceLimit(Imagick::RESOURCETYPE_THREAD, $threads);
         }
     }
 }

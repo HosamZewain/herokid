@@ -861,6 +861,7 @@ Route::middleware(['auth', 'is_admin', 'admin_audit', EnforceOrderAccess::class,
         ->middleware(['permission:orders.create', 'throttle:60,1'])
         ->name('orders.existing-customers.search');
     Route::post('orders', [OrderController::class, 'store'])->middleware('permission:orders.create')->name('orders.store');
+    Route::get('orders/groups/{representative}/list-panel/{panel}', [OrderGroupController::class, 'listPanel'])->whereNumber('representative')->whereIn('panel', ['workflow', 'messages'])->middleware('permission:orders.view')->name('orders.groups.list-panel');
     Route::get('orders/groups/{representative}', [OrderGroupController::class, 'show'])->whereNumber('representative')->middleware('permission:orders.view')->name('orders.groups.show');
     Route::get('orders/groups/{representative}/edit', [OrderEditController::class, 'edit'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.edit');
     Route::put('orders/groups/{representative}', [OrderEditController::class, 'update'])->whereNumber('representative')->middleware('permission:orders.update')->name('orders.groups.update');

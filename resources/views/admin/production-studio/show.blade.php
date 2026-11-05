@@ -2273,12 +2273,19 @@
                     return payload;
                 }
 
+                let automationStatusRequest;
                 async function refreshAutomationStatus(showFeedback = false) {
+                    if (automationStatusRequest) return automationStatusRequest;
+                    automationStatusRequest = loadAutomationStatus(showFeedback);
+                    try { return await automationStatusRequest; } finally { automationStatusRequest = null; }
+                }
+                async function loadAutomationStatus(showFeedback = false) {
                     if (showFeedback) {
                         studioFeedback(automationFeedback, 'info', 'جارٍ تحديث حالة الإنتاج التلقائي...');
                     }
 
                     const response = await fetch(automationPanel.dataset.statusUrl, {
+                        signal: AbortSignal.timeout(15000),
                         headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                         cache: 'no-store',
                     });
@@ -2457,10 +2464,7 @@
                     }
                 });
 
-                refreshAutomationStatus(false).catch(() => {});
-                window.setInterval(() => {
-                    refreshAutomationStatus(false).catch(() => {});
-                }, 10000);
+                window.HeroKidVisibilityPoller(() => refreshAutomationStatus(false), {interval: 10000});
             }
 
             document.addEventListener('click', function (event) {

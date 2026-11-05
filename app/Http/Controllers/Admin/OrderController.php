@@ -44,18 +44,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OrderController extends Controller
 {
-    public function index(Request $request, AdminOrderGroupService $groups, OrderWhatsAppMessageService $whatsappMessages)
+    public function index(Request $request, AdminOrderGroupService $groups)
     {
         $result = $groups->paginate(
             $request,
             $request->user()->hasPermission('orders.statistics.view'),
-        );
-        $result['groups']->setCollection(
-            $result['groups']->getCollection()->map(function (array $group) use ($whatsappMessages): array {
-                $group['whatsapp_messages'] = $whatsappMessages->messagesForGroup($group);
-
-                return $group;
-            })
         );
 
         return view('admin.orders.index', $result);

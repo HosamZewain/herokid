@@ -1,0 +1,32 @@
+import {chromium} from 'playwright-core';
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const fixture='/tmp/hk-allperf-browser-fixtures';
+const browser=await chromium.launch({headless:true,executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+const page=await browser.newPage({viewport:{width:1440,height:1000}});
+const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));
+await page.route('**/*',async route=>{
+ const u=new URL(route.request().url());
+ if(u.pathname.startsWith('/build/'))return route.fulfill({body:await fs.readFile('public'+u.pathname),contentType:u.pathname.endsWith('.css')?'text/css':'application/javascript'});
+ if(u.pathname.includes('/list-panel/')){requests.push(u.pathname);return route.fulfill({contentType:'application/json',body:JSON.stringify({html:await fs.readFile(fixture+'/'+u.pathname.split('/').at(-1)+'.html','utf8')})});}
+ if(u.pathname==='/admin/orders')return route.fulfill({contentType:'text/html',body:await fs.readFile(fixture+'/index.html','utf8')});
+ return route.abort();
+});
+await page.goto('http://localhost/admin/orders');await page.waitForTimeout(500);
+assert.equal(requests.length,0);assert.equal(await page.locator('[data-workflow-status-form]').count(),0);
+await page.locator('[data-workflow-toggle]:visible').first().click();
+const form=page.locator('[data-workflow-status-form]:visible');await form.waitFor();
+await form.locator('[name=payment_status]').selectOption('partially_paid');
+assert.equal(await form.locator('[name=paid_amount]').isEnabled(),true);
+assert.equal(await form.locator('[name=paid_amount]').getAttribute('required'),'');
+await form.locator('[name=paid_amount]').fill('35');
+await form.locator('[name=payment_status]').selectOption('unpaid');assert.equal(await form.locator('[name=paid_amount]').isDisabled(),true);
+await page.locator('[data-workflow-toggle]:visible').first().click();await page.locator('[data-workflow-toggle]:visible').first().click();
+assert.equal(requests.length,1);
+await page.locator('[data-order-list-details]:visible').first().locator('summary').click();await page.locator('a[href^="https://wa.me/"]:visible').first().waitFor();
+assert.equal(requests.length,2);assert.deepEqual(errors,[]);
+await page.setViewportSize({width:390,height:844});await page.goto('http://localhost/admin/orders');await page.waitForTimeout(300);
+const details=page.locator('details[data-order-list-details]:visible').filter({hasText:'تغيير الحالات الأربع'});await details.locator('summary').click();await page.locator('[data-workflow-status-form]:visible').waitFor();
+assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(errors,[]);
+console.log(JSON.stringify({desktopLazyForms:true,mobileLazyForms:true,paymentBehavior:true,messages:true,noDuplicateLoads:true,errors}));
+await browser.close();

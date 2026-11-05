@@ -1,5 +1,10 @@
 # HeroKid AWS deployment and agent handoff
 
+## 5 November 2026 — catalog/admin/Studio optimization PREPARED
+
+Owner requested all audit improvements. Isolated codex/catalog-admin-performance-20261105, revalidated AWS/GitHub base7eb834ab4f3efb0b232ef5a6b0044fd9a73aac5a. [Scope, tests and publication boundaries](catalog-admin-performance-2026-11-05.md). Deferred list workflow/WhatsApp panels keep current authorization, native forms/CSRF and original links; narrow list relations and reused filtered-key counts preserve scopes/ordering/representatives. Studio polls only visible pages without overlap; bounded CPU public image encoder preserves originals. PHP8.3 SQLite/MySQL each122tests/1740assertions,34JS tests and synthetic desktop/mobile browser checks pass. Build/route/Blade/Pint/diff pass; prior assets retained. Code and one-time public catalog derivative pass prepared; no deployment completion or image-backfill completion claimed yet. No schema/infrastructure/private-media/consent/ledger changes. Default worker graceful refresh only, other workers/Codex/AutoPilot preserved.
+
+
 ## 5 November 2026 — preview media latency correction DEPLOYED
 
 Application **bd7590b21ec2d18edb0324635b41a9b141a127f6**, initial **2d5e5d707240a2723a3601762c278459b456508f**, base **b4de4e60018535e61827e90e16143b48e2c81590**, published from main under the owner's ongoing fix/deployment instruction. Initial22:08:26UTC, final22:14:05UTC on4November / **00:14:05Cairo5November**. Isolated codex/preview-media-latency-20261104 preserves primary mobile/UI work. [Evidence, implementation, tests and limitations](preview-media-latency-2026-11-05.ar.md).
@@ -711,7 +716,7 @@ Read-only first-five-order reconciliation remains applicable: HK10-618 confirmed
 | Public site | `https://hero-kid.com`; `https://www.hero-kid.com` redirects to the apex |
 | EC2 / Elastic IP | `i-00fea72c8abdc72f3` / `63.188.124.6` |
 | Region / zone | `eu-central-1` / `eu-central-1b` (zone from migration audit) |
-| Capacity | Ubuntu 24.04, t3.medium, 30 GB gp3 EBS, approximately 4 GB RAM and 2 GB swap; no resize authorized |
+| Capacity | Ubuntu 24.04, t3.medium, 60 GiB gp3 EBS (owner-approved expansion4November), approximately 4 GB RAM and 2 GB swap |
 | SSH | `ssh -i ~/Downloads/herokid-prod-key.pem ubuntu@63.188.124.6` |
 | Application / web root | `/var/www/herokid` / `/var/www/herokid/public` |
 | Runtime | Nginx, PHP 8.3 FPM, MySQL, Redis, Supervisor; application processes use `www-data` |
