@@ -171,6 +171,14 @@ class OrderAutomationSummary
                 if ($run->status === 'completed' && $fulfilled) {
                     $state = 'idle';
                 }
+                if (isset($run->book_pdf['repair_target'])) {
+                    $done += $run->book_pdf['repair_saved'];
+                    $total = $run->book_pdf['repair_total'];
+                    $add($stage, $run->status === 'completed' ? 'running' : $state, 'استكمال صفحة '.$run->book_pdf['repair_target'].' من كتاب التلوين — '.$done.' من '.$total,
+                        $run->updated_at, $run->error_code, $run->order_id, $done, $total);
+
+                    continue;
+                }
                 $add($stage, $state, self::STAGES[$stage].': '.$done.' من '.($run->scene_count ?? 13).' — '.(CodexSceneRun::LABELS[$run->status] ?? $run->status), $run->updated_at, $run->error_code ? $run->error_code : ($run->status === 'completed' && ! $fulfilled ? 'جاهز لمراجعة الفريق' : null), $run->order_id, $done, $run->scene_count ?? 13);
             }
             foreach ($legacyBooks->whereIn('order_id', $rows->pluck('id')) as $book) {

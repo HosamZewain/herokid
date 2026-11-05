@@ -40,10 +40,12 @@ use App\Services\Agentic\OrderContextBuilder;
 use App\Services\Agentic\ProductionExecutor;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\GptImageClient;
+use App\Services\CodexScenes\BookPageRecovery;
 use App\Services\CodexScenes\BookPageService;
 use App\Services\CodexScenes\BookPdfService;
 use App\Services\CodexScenes\BookReferences;
 use App\Services\CodexScenes\ManualSceneService;
+use App\Services\CodexScenes\OrderGenerationBanner;
 use App\Services\OrderAutomation\Process\PreviewCohort;
 use App\Services\OrderAutomation\Process\ProcessDefinition;
 use App\Services\OrderAutomation\Process\ProcessEnrollment;
@@ -1253,6 +1255,259 @@ class ProductReviewRuntimeTest extends TestCase
         $run->update(['scenes' => $scenes]);
 
         return $run;
+    }
+
+    private function missingBookFixture(int $count = 3, array $missing = [2]): CodexSceneRun
+    {
+        $run = $this->pdfFixture($count);
+        $pages = $run->scenes;
+        $progress = [];
+        foreach ($missing as $n) {
+            unset($pages[$n]);
+            $progress[$n] = ['status' => 'failed', 'code' => 'generation_result_uncertain', 'attempts' => []];
+        }
+        $run->update(['scenes' => $pages, 'status' => 'needs_manual', 'scene_progress' => $progress, 'finished_at' => now()]);
+        $run->order->updateQuietly(['status' => 'pending_team_review', 'payment_status' => 'partially_paid', 'paid_amount_cents' => 10000,
+            'printing_status' => 'in_progress', 'shipping_status' => 'ready']);
+        $snapshot = $run->snapshot;
+        $snapshot += ['texts' => array_map(fn ($n) => ['scene_number' => $n], range(1, $count)), 'references' => []];
+        $identity = $this->png(19);
+        Storage::disk('s3_private')->put('synthetic-repair-cover.png', $identity);
+        $snapshot += ['prompt' => 'Synthetic coloring brief', 'identity_disk' => 's3_private', 'identity_path' => 'synthetic-repair-cover.png', 'identity_checksum' => hash('sha256', $identity)];
+        $snapshot['references'] = [['file' => 'child-reference-1.png', 'role' => 'child_photo', 'disk' => 's3_private', 'path' => 'child-photos/synthetic.png', 'sha256' => hash('sha256', $this->png)]];
+        $run->update(['snapshot' => $snapshot]);
+        $root = config('codex_scenes.spool');
+        File::ensureDirectoryExists($root.'/inbox/'.$run->id);
+        File::ensureDirectoryExists($root.'/outbox/'.$run->id);
+        file_put_contents($root.'/inbox/'.$run->id.'/manifest.json', json_encode(['id' => $run->id, 'scene_count' => 3]));
+        file_put_contents($root.'/outbox/'.$run->id.'/status.json', json_encode(['id' => $run->id, 'status' => 'needs_manual',
+            'manifest_sha256' => hash_file('sha256', $root.'/inbox/'.$run->id.'/manifest.json'), 'scene_progress' => $progress]));
+        $mock = \Mockery::mock(BookPageService::class);
+        $mock->shouldReceive('workerReady')->andReturn(true);
+        $mock->shouldReceive('fingerprint')->andReturn($run->fingerprint);
+        $mock->shouldReceive('statusEligible')->andReturn(false);
+        app()->instance(BookPageService::class, $mock);
+
+        return $run->fresh();
+    }
+
+    public function test_missing_book_page_gets_one_distinct_replacement_then_complete_pdf_without_replacing_saved_pages(): void
+    {
+        $parent = $this->missingBookFixture();
+        $original = $parent->scenes;
+        $service = app(BookPageRecovery::class);
+        $this->assertNull($service->advance($parent, true));
+        $child = CodexSceneRun::whereKeyNot($parent->id)->sole();
+        $this->assertSame(1, $child->scene_count);
+        $this->assertSame(2, $child->snapshot['book_repair']['page']);
+        $this->assertSame(3, $child->snapshot['book_repair']['page_count']);
+        $this->assertSame('waiting_slot', $child->status);
+        $this->assertSame($original, $parent->fresh()->scenes);
+        $service->advance($parent->fresh(), true);
+        $this->assertDatabaseCount('codex_scene_runs', 2);
+        $source = $this->pdfFixture(4);
+        $scene = $source->scenes[4];
+        $bytes = Storage::disk('s3_private')->get($scene['path']);
+        $path = 'orders/'.$child->order_id.'/codex-scenes/'.$child->id.'/page-01-a4.png';
+        Storage::disk('s3_private')->put($path, $bytes);
+        $scene['path'] = $path;
+        $scene['source_run_id'] = $child->id;
+        $child->update(['status' => 'completed', 'active_slot' => null, 'scenes' => [1 => $scene]]);
+        $source->delete();
+        $final = $service->advance($parent->fresh());
+        $this->assertNotNull($final);
+        $this->assertSame(3, $final->scene_count);
+        $this->assertSame($original[1], $final->scenes[1]);
+        $this->assertSame($original[3], $final->scenes[3]);
+        $this->assertSame(1, $final->scenes[2]['source_scene']);
+        $this->assertSame($child->id, $final->scenes[2]['source_run_id']);
+        $this->assertTrue($final->fresh()->book_pdf['complete']);
+        $this->assertSame([], $final->fresh()->book_pdf['missing_pages']);
+        $this->assertSame('ready', $final->fresh()->book_pdf['status']);
+        $this->assertSame($original, $parent->fresh()->scenes);
+        $this->assertSame('in_progress', $parent->order->fresh()->printing_status);
+        $this->assertSame('ready', $parent->order->fresh()->shipping_status);
+        $this->assertSame($final->id, $service->advance($parent->fresh())->id);
+        $this->assertDatabaseCount('codex_scene_runs', 3);
+        $tampered = $final->scenes[2];
+        $tampered['source_scene'] = 3;
+        $this->expectException(\RuntimeException::class);
+        BookPdfService::pageBytes($final->fresh(), 2, $tampered);
+    }
+
+    public function test_missing_book_recovery_does_not_bypass_refusals_replay_historical_runs_or_unsettled_outputs(): void
+    {
+        $parent = $this->missingBookFixture();
+        $service = app(BookPageRecovery::class);
+        $service->pending();
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        $progress = $parent->scene_progress;
+        $progress[2]['code'] = 'content_review';
+        $parent->update(['scene_progress' => $progress]);
+        $state = config('codex_scenes.spool').'/outbox/'.$parent->id.'/status.json';
+        $s = json_decode(file_get_contents($state), true);
+        $s['scene_progress'] = $progress;
+        file_put_contents($state, json_encode($s));
+        $service->advance($parent->fresh(), true);
+        $this->assertSame('blocked', $parent->fresh()->book_pdf['recovery']['status']);
+        $this->assertStringContainsString('رفض محتوى', $parent->fresh()->book_pdf['recovery']['reason']);
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_failed_replacement_is_bounded_and_pause_prevents_its_admission(): void
+    {
+        $parent = $this->missingBookFixture();
+        $service = app(BookPageRecovery::class);
+        DB::table('order_automation_controls')->insert(['checkout_key' => $parent->checkout_key, 'state' => 'paused', 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        $service->advance($parent, true);
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        DB::table('order_automation_controls')->where('checkout_key', $parent->checkout_key)->update(['state' => 'running']);
+        $service->advance($parent->fresh(), true);
+        $child = CodexSceneRun::whereKeyNot($parent->id)->sole();
+        $child->update(['status' => 'needs_manual', 'active_slot' => null]);
+        $service->pending();
+        $this->assertSame('blocked', $parent->fresh()->book_pdf['recovery']['status']);
+        $service->pending();
+        $this->assertDatabaseCount('codex_scene_runs', 2);
+        $this->assertDatabaseCount('order_attachments', 0);
+    }
+
+    public function test_uncollected_worker_output_blocks_a_replacement_instead_of_duplicating_it(): void
+    {
+        $parent = $this->missingBookFixture();
+        file_put_contents(config('codex_scenes.spool').'/outbox/'.$parent->id.'/scene-02.json', '{}');
+        app(BookPageRecovery::class)->advance($parent, true);
+        $this->assertSame('blocked', $parent->fresh()->book_pdf['recovery']['status']);
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        $this->assertDatabaseCount('order_attachments', 0);
+    }
+
+    public function test_multiple_missing_pages_are_replaced_serially_without_a_second_active_order_run(): void
+    {
+        $parent = $this->missingBookFixture(3, [1, 3]);
+        $service = app(BookPageRecovery::class);
+        $service->advance($parent, true);
+        foreach ([1, 3] as $number) {
+            $child = CodexSceneRun::where('active_slot', 1)->sole();
+            $this->assertSame($number, $child->snapshot['book_repair']['page']);
+            $bytes = $this->png(20 + $number);
+            $path = 'orders/'.$child->order_id.'/codex-scenes/'.$child->id.'/scene-01.png';
+            Storage::disk('s3_private')->put($path, $bytes);
+            $child->update(['status' => 'completed', 'active_slot' => null, 'scenes' => [1 => ['source_run_id' => $child->id, 'path' => $path, 'sha256' => hash('sha256', $bytes), 'attachment_id' => null]]]);
+            $final = $service->advance($parent->fresh());
+        }
+        $this->assertTrue($final->fresh()->book_pdf['complete']);
+        $this->assertSame([1, 2, 3], array_keys($final->scenes));
+        $this->assertDatabaseCount('codex_scene_runs', 4);
+        $this->assertSame(0, CodexSceneRun::where('active_slot', 1)->count());
+        $this->assertDatabaseCount('order_attachments', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_new_partial_book_is_automatically_recovered_by_collector_without_publishing_a_partial_pdf(): void
+    {
+        $parent = $this->missingBookFixture();
+        $parent->order->updateQuietly(['status' => 'generating']);
+        $parent->update(['status' => 'running', 'active_slot' => 1, 'scene_progress' => []]);
+        $path = config('codex_scenes.spool').'/outbox/'.$parent->id.'/status.json';
+        $state = json_decode(file_get_contents($path), true);
+        foreach ([1, 2, 3] as $number) {
+            $attempt = ['number' => 1, 'status' => $number === 2 ? 'failed' : 'succeeded', 'started_at' => (float) now()->timestamp, 'finished_at' => (float) now()->timestamp];
+            if ($number === 2) {
+                $attempt['code'] = 'generation_result_uncertain';
+            }
+            $state['scene_progress'][$number] = ['status' => $number === 2 ? 'failed' : 'succeeded', 'attempts' => [$attempt]];
+            if ($number === 2) {
+                $state['scene_progress'][$number]['code'] = 'generation_result_uncertain';
+            }
+        }
+        file_put_contents($path, json_encode($state));
+        app(ManualSceneService::class)->collect($parent->fresh());
+        $this->assertSame('needs_manual', $parent->fresh()->status);
+        $this->assertSame('working', $parent->fresh()->book_pdf['recovery']['status']);
+        $this->assertDatabaseCount('codex_scene_runs', 2);
+        $this->assertDatabaseCount('order_attachments', 0);
+        $child = CodexSceneRun::whereKeyNot($parent->id)->sole();
+        $this->assertSame(2, $child->snapshot['book_repair']['page']);
+        Http::assertNothingSent();
+    }
+
+    public function test_authorized_team_can_repair_one_page_after_safe_pause_without_resuming_other_automation(): void
+    {
+        $parent = $this->missingBookFixture();
+        foreach (['orders.automation.control', 'orders.production_prompt.manage', 'orders.view_all'] as $permission) {
+            $this->actor->permissions()->syncWithoutDetaching(Permission::firstOrCreate(['key' => $permission], ['name' => $permission])->id);
+        }
+        $actor = $this->actor->fresh();
+        DB::table('order_automation_controls')->insert(['checkout_key' => $parent->checkout_key, 'state' => 'paused', 'version' => 4, 'created_at' => now(), 'updated_at' => now()]);
+        $service = app(BookPageRecovery::class);
+        $service->advance($parent, true, $actor);
+        $child = CodexSceneRun::whereKeyNot($parent->id)->sole();
+        $this->assertSame('manual', $child->source);
+        $this->assertSame($actor->id, $child->requested_by);
+        $this->assertTrue($service->manualAllowed($child));
+        $child->update(['status' => 'preparing']);
+        $prepare = new \ReflectionMethod(ManualSceneService::class, 'prepare');
+        $prepare->invoke(app(ManualSceneService::class), $child->fresh());
+        $manifest = config('codex_scenes.spool').'/inbox/'.$child->id.'/manifest.json';
+        $this->assertFileExists($manifest);
+        $data = json_decode(file_get_contents($manifest), true);
+        $this->assertSame(1, $data['scene_count']);
+        $this->assertSame($parent->order_item_id, $data['order_item_id']);
+        $this->assertCount(1, $data['references']);
+        $this->assertSame('paused', DB::table('order_automation_controls')->value('state'));
+        $this->assertSame(4, DB::table('order_automation_controls')->value('version'));
+        $actor->permissions()->detach(Permission::where('key', 'orders.production_prompt.manage')->value('id'));
+        $this->assertFalse($service->manualAllowed($child->fresh()));
+        $this->assertFalse($service->requesterAuthorized($child->fresh()));
+        $this->assertSame($parent->scenes, $parent->fresh()->scenes);
+        Http::assertNothingSent();
+    }
+
+    public function test_changed_approval_blocks_missing_page_recovery(): void
+    {
+        $parent = $this->missingBookFixture();
+        $mock = \Mockery::mock(BookPageService::class);
+        $mock->shouldReceive('workerReady')->andReturn(true);
+        $mock->shouldReceive('fingerprint')->andReturn(str_repeat('b', 64));
+        app()->instance(BookPageService::class, $mock);
+        app(BookPageRecovery::class)->advance($parent, true);
+        $this->assertStringContainsString('تغيرت بيانات', $parent->fresh()->book_pdf['recovery']['reason']);
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+    }
+
+    public function test_book_recovery_is_a_native_authorized_stale_checked_team_action(): void
+    {
+        $parent = $this->missingBookFixture();
+        foreach (['orders.automation.control', 'orders.production_prompt.manage', 'orders.view_all'] as $permission) {
+            $this->actor->permissions()->syncWithoutDetaching(Permission::firstOrCreate(['key' => $permission], ['name' => $permission])->id);
+        }
+        $this->actingAs($this->actor->fresh());
+        $url = route('admin.orders.codex-scenes.recover-book', [$parent->order, $parent]);
+        $this->post($url, ['confirm' => 1, 'expected_updated_at' => 'stale'])->assertStatus(409);
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        $this->post($url, ['confirm' => 1, 'expected_updated_at' => $parent->fresh()->updated_at->toISOString()])->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertDatabaseCount('codex_scene_runs', 2);
+        $this->actor->permissions()->detach(Permission::where('key', 'orders.automation.control')->value('id'));
+        $this->actingAs($this->actor->fresh())->post($url, ['confirm' => 1, 'expected_updated_at' => $parent->fresh()->updated_at->toISOString()])->assertForbidden();
+        $this->assertDatabaseCount('codex_scene_runs', 2);
+    }
+
+    public function test_autopilot_context_keeps_full_book_numbers_during_native_missing_page_recovery(): void
+    {
+        $parent = $this->missingBookFixture();
+        app(BookPageRecovery::class)->advance($parent, true);
+        $context = app(OrderContextBuilder::class)->build($parent->checkout_key);
+        $book = collect($context['units'])->firstWhere('capability', 'book_interior');
+        $this->assertTrue($book['production']['active']);
+        $this->assertSame('scenes:'.$parent->id, $book['production']['run_ref']);
+        $this->assertSame([2], $book['production']['missing_numbers']);
+        $this->assertSame([1, 3], $book['production']['completed_numbers']);
+        $this->assertSame(3, $book['expected_outputs']);
+        $banner = app(OrderGenerationBanner::class)->data($parent->order->fresh());
+        $this->assertSame(3, $banner['generationRows']->sole()['total']);
+        $this->assertSame(2, $banner['generationRows']->sole()['done']);
     }
 
     public function test_book_pdf_20_40_50_pages_is_a4_single_attachment_and_idempotent(): void

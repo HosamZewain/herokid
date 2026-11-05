@@ -363,11 +363,12 @@ class ManualSceneService
     {
         Cache::lock('codex-scenes-sync', 110)->get(function () {
             app(BookPdfService::class)->retryPending();
+            app(BookPageRecovery::class)->pending();
             $this->enroll();
             app(BookPageService::class)->enroll();
             foreach (CodexSceneRun::where('active_slot', 1)->orderBy('created_at')->get() as $run) {
                 if ($run->status === 'waiting_slot') {
-                    if (AutomationControl::blocked($run->checkout_key)) {
+                    if (AutomationControl::blocked($run->checkout_key) && ! app(BookPageRecovery::class)->manualAllowed($run)) {
                         continue;
                     }
                     // An uncertain provider result pauses further dispatch until reviewed.
@@ -386,7 +387,7 @@ class ManualSceneService
                         continue;
                     }
                     if ($run->status === 'preparing') {
-                        if (AutomationControl::blocked($run->checkout_key) && ! is_file(config('codex_scenes.spool').'/inbox/'.$run->id.'/manifest.json')) {
+                        if (AutomationControl::blocked($run->checkout_key) && ! app(BookPageRecovery::class)->manualAllowed($run) && ! is_file(config('codex_scenes.spool').'/inbox/'.$run->id.'/manifest.json')) {
                             $run->update(['status' => 'paused', 'active_slot' => null]);
 
                             continue;
@@ -410,6 +411,10 @@ class ManualSceneService
     private function prepare(CodexSceneRun $run): void
     {
         $order = $run->order;
+        if (! app(BookPageRecovery::class)->requesterAuthorized($run)
+            || (isset($run->snapshot['book_repair']) && ! $this->hasPayment($order))) {
+            throw new \RuntimeException('Repair authorization changed');
+        }
         if ($run->production_kind === 'coloring_book' && ! app(BookPageService::class)->workerReady()) {
             throw new \RuntimeException('Book worker unavailable');
         }
@@ -470,7 +475,8 @@ class ManualSceneService
                 || ($locked->source === 'automatic' && (! $this->hasPayment($order) || AutomationHandoff::held($locked->checkout_key)))) {
                 throw new \RuntimeException('Eligibility changed before dispatch');
             }
-            if (! AutomationControl::admits($locked->checkout_key)) {
+            if (! app(BookPageRecovery::class)->requesterAuthorized($locked)
+                || ! AutomationControl::admits($locked->checkout_key, app(BookPageRecovery::class)->manualAllowed($locked))) {
                 return;
             }
             rename($dir.'/manifest.tmp', $dir.'/manifest.json');
@@ -481,7 +487,8 @@ class ManualSceneService
 
     private function runFingerprint(CodexSceneRun $run, Order $order): string
     {
-        return $run->production_kind === 'coloring_book' ? app(BookPageService::class)->fingerprint($run) : $this->fingerprint($order);
+        return $run->production_kind === 'coloring_book' ? app(BookPageService::class)->fingerprint($run,
+            isset($run->snapshot['book_repair']['manual_actor_id']) && AutomationControl::blocked($run->checkout_key)) : $this->fingerprint($order);
     }
 
     private function safeFile(string $path, string $directory): bool
@@ -502,7 +509,8 @@ class ManualSceneService
         if (($state['id'] ?? null) !== $run->id) {
             throw new \RuntimeException('Run mismatch');
         }
-        DB::transaction(function () use ($run, $dir, $state) {
+        $newPartialBook = false;
+        DB::transaction(function () use ($run, $dir, $state, &$newPartialBook) {
             $run = CodexSceneRun::lockForUpdate()->findOrFail($run->id);
             if (! $run->active_slot) {
                 return;
@@ -513,9 +521,6 @@ class ManualSceneService
                 $run->timing = $timing;
             }
             if (($state['status'] ?? '') === 'stopped') {
-                if ($run->production_kind === 'coloring_book' && $run->scenes) {
-                    app(BookPdfService::class)->request($run);
-                }
                 $run->update(['status' => 'stopped', 'active_slot' => null, 'finished_at' => now()]);
                 if (! $order->trashed() && $order->status === 'generating') {
                     $this->setStatus($order, $run->previous_status, 'توقف توليد Codex مع الاحتفاظ بالمشاهد المحفوظة.');
@@ -600,10 +605,12 @@ class ManualSceneService
                     $run->active_slot = null;
                     $run->finished_at = now();
                     $incompleteSibling = $run->production_kind === 'coloring_book' && CodexSceneRun::where('order_id', $order->id)
-                        ->where('production_kind', 'coloring_book')->whereKeyNot($run->id)->whereIn('status', ['needs_manual', 'quality_review', 'uncertain', 'stopped'])->exists();
-                    $this->setStatus($order, $incompleteSibling ? 'pending_team_review' : ($run->production_kind === 'coloring_book' ? 'delivered' : 'ready_preview'), $incompleteSibling
-                        ? 'اكتملت صفحات هذا الكتاب؛ يوجد كتاب آخر في الطلب يحتاج مراجعة الفريق.'
-                        : 'اكتملت مشاهد Codex؛ راجع الصور داخليًا ثم جهّز النص والملف في Studio.');
+                        ->where('production_kind', 'coloring_book')->where('order_item_id', '!=', $run->order_item_id)->whereIn('status', ['needs_manual', 'quality_review', 'uncertain', 'stopped'])->exists();
+                    if (! isset($run->snapshot['book_repair'])) {
+                        $this->setStatus($order, $incompleteSibling ? 'pending_team_review' : ($run->production_kind === 'coloring_book' ? 'delivered' : 'ready_preview'), $incompleteSibling
+                            ? 'اكتملت صفحات هذا الكتاب؛ يوجد كتاب آخر في الطلب يحتاج مراجعة الفريق.'
+                            : 'اكتملت مشاهد Codex؛ راجع الصور داخليًا ثم جهّز النص والملف في Studio.');
+                    }
                 } elseif ($phase === 'paused') {
                     $expected = collect($state['scene_progress'] ?? [])->filter(fn ($p) => in_array($p['status'] ?? '', ['succeeded', 'retained'], true))->count();
                     if (count($saved) !== $expected) {
@@ -636,15 +643,19 @@ class ManualSceneService
                     $run->error_code = 'codex_requires_review';
                 }
             }
-            if ($run->production_kind === 'coloring_book' && $saved && in_array($phase, ['completed', 'needs_manual', 'paused', 'stopped', 'failed', 'uncertain', 'quality_review'], true)) {
+            if ($run->production_kind === 'coloring_book' && $saved && $phase === 'completed' && ! isset($run->snapshot['book_repair'])) {
                 app(BookPdfService::class)->request($run);
             }
             $changed = $run->isDirty('status');
+            $newPartialBook = $changed && $run->status === 'needs_manual' && $run->production_kind === 'coloring_book' && ! isset($run->snapshot['book_repair']);
             $run->save();
             if ($changed) {
                 AutomationActivity::record($order, 'codex_scene_progress', 'حالة توليد Codex: '.(['needs_manual' => 'تسليم المشاهد الناقصة للتيم', 'running' => 'جاري التوليد', 'completed' => 'اكتملت المشاهد للمعاينة الداخلية', 'stopped' => 'متوقفة', 'quality_review' => 'تحتاج مراجعة جودة: '.(CodexSceneRun::ERRORS[$run->error_code] ?? ''), 'uncertain' => 'تحتاج مراجعة'][$run->status] ?? $run->status), ['run_id' => $run->id, 'scene_count' => count($saved)]);
             }
         });
         app(BookPdfService::class)->publish($run->fresh());
+        if ($newPartialBook) {
+            app(BookPageRecovery::class)->advance($run->fresh(), true);
+        }
     }
 }

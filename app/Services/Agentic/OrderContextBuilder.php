@@ -131,7 +131,7 @@ class OrderContextBuilder
             foreach ($order->items->whereIn('item_type', ['product', 'product_add_on']) as $item) {
                 foreach ($this->specifications->forItem($item) as $spec) {
                     $bookPages = $spec['capability'] === 'book_interior';
-                    $run = $bookPages ? CodexSceneRun::where('order_item_id', $item->id)->where('production_kind', 'coloring_book')->latest('created_at')->first()
+                    $run = $bookPages ? CodexSceneRun::where('order_item_id', $item->id)->where('production_kind', 'coloring_book')->whereNull('book_pdf->repair_parent')->latest('created_at')->first()
                         : PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first();
                     $approvedImage = $manifest ? collect($manifest->images)->first(fn ($image) => ($image['item_id'] ?? null) === $item->id && ($image['kind'] ?? null) === 'book_cover') : null;
                     $generation = $bookPages ? PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first() : $run;
@@ -191,9 +191,10 @@ class OrderContextBuilder
     {
         $numbers = $run instanceof CodexSceneRun ? array_map('intval', array_keys($run->scenes ?? [])) : ($run?->status === 'succeeded' ? [1] : []);
         sort($numbers);
+        $recovering = $run instanceof CodexSceneRun && in_array($run->book_pdf['recovery']['status'] ?? '', ['queued', 'working'], true);
 
-        return ['run_ref' => $run ? ($run instanceof CodexSceneRun ? 'scenes:' : 'image:').$run->id : null, 'status' => $run?->status,
-            'active' => in_array($run?->status, ['queued', 'processing', 'running', 'preparing', 'waiting_slot', 'stopping'], true),
+        return ['run_ref' => $run ? ($run instanceof CodexSceneRun ? 'scenes:' : 'image:').$run->id : null, 'status' => $recovering ? 'running' : $run?->status,
+            'active' => $recovering || in_array($run?->status, ['queued', 'processing', 'running', 'preparing', 'waiting_slot', 'stopping'], true),
             'uncertain' => $run?->status === 'uncertain', 'attempted' => $run !== null,
             'completed_numbers' => $numbers, 'missing_numbers' => array_values(array_diff(range(1, max(1, min(1000, $expected))), $numbers))];
     }

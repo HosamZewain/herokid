@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
+use App\Services\CodexScenes\BookPageRecovery;
 use App\Services\CodexScenes\ManualSceneService;
 use App\Services\CodexScenes\OrderGenerationBanner;
 use App\Services\CodexScenes\SceneTiming;
@@ -13,9 +14,28 @@ use App\Services\Orders\PrivateOrderThumbnail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CodexSceneController extends Controller
 {
+    public function recoverBook(Request $request, Order $order, CodexSceneRun $run, BookPageRecovery $recovery)
+    {
+        abort_unless($run->order_id === $order->id && $run->production_kind === 'coloring_book', 404);
+        abort_unless(app(OrderAccess::class)->controls($order, $request->user()), 403);
+        $data = $request->validate(['confirm' => 'required|accepted', 'expected_updated_at' => 'required|string']);
+        abort_unless($run->updated_at->toISOString() === $data['expected_updated_at'], 409, 'تغير تقدم الكتاب؛ حدّث الصفحة.');
+        $recovery->advance($run, true, $request->user());
+        $state = $run->fresh()->book_pdf['recovery'] ?? [];
+        if (! $state) {
+            throw ValidationException::withMessages(['book_recovery' => 'لم يبدأ الاستكمال: راجع الاتصال بالعامل ووضع الإيقاف، ثم أعد الطلب.']);
+        }
+        if (($state['status'] ?? '') === 'blocked') {
+            throw ValidationException::withMessages(['book_recovery' => $state['reason']]);
+        }
+
+        return back()->with('success', 'تم طلب استكمال الصفحات الناقصة فقط؛ الملف النهائي يظهر بعد اكتمال العدد. الصور المحفوظة لن تُعاد.');
+    }
+
     public function index(Request $request)
     {
         $data = $this->monitorData($request);

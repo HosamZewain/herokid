@@ -21,7 +21,7 @@ class ProtectAutomationOrders
             return $next($request);
         }
         // The combined form checks actual production changes under the checkout lock.
-        if ($request->routeIs('admin.orders.groups.assignment.*', 'admin.orders.workspace.*', 'admin.orders.groups.workflow-statuses', 'admin.orders.groups.payment', 'admin.orders.payment-review.close', 'admin.orders.codex-scenes.stop', 'admin.orders.codex-scenes.start', 'admin.orders.products.regenerate', 'admin.orders.identity.regenerate',
+        if ($request->routeIs('admin.orders.groups.assignment.*', 'admin.orders.workspace.*', 'admin.orders.groups.workflow-statuses', 'admin.orders.groups.payment', 'admin.orders.payment-review.close', 'admin.orders.codex-scenes.stop', 'admin.orders.codex-scenes.start', 'admin.orders.codex-scenes.recover-book', 'admin.orders.products.regenerate', 'admin.orders.identity.regenerate',
             'admin.orders.groups.shipping-merge.resolve', 'admin.orders.notes.*', 'admin.orders.groups.tags*', 'admin.orders.activity.*', 'admin.orders.message-retry')) {
             return $next($request);
         }

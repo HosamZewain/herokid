@@ -118,14 +118,20 @@ class BookPdfService
     public static function pageBytes(CodexSceneRun $run, int $number, array $scene): string
     {
         $sourceId = $scene['source_run_id'] ?? $run->id;
+        $sourceNumber = (int) ($scene['source_scene'] ?? $number);
         $source = $sourceId === $run->id ? $run : CodexSceneRun::find($sourceId);
+        if ($sourceNumber !== $number && (($run->snapshot['book_recovery']['children'][$number] ?? null) !== $sourceId
+            || ($source?->snapshot['book_repair']['parent_id'] ?? null) !== ($run->snapshot['book_recovery']['parent_id'] ?? null)
+            || ($source?->snapshot['book_repair']['page'] ?? null) !== $number || $sourceNumber !== 1 || $source?->scene_count !== 1)) {
+            throw new RuntimeException('PDF replacement page binding mismatch');
+        }
         if (! $source || $source->production_kind !== 'coloring_book' || $source->order_id !== $run->order_id || $source->order_item_id !== $run->order_item_id
             || ($source->snapshot['unit_key'] ?? null) !== ($run->snapshot['unit_key'] ?? null)
-            || ($source->scenes[(string) $number]['sha256'] ?? null) !== ($scene['sha256'] ?? null)) {
+            || ($source->scenes[(string) $sourceNumber]['sha256'] ?? null) !== ($scene['sha256'] ?? null)) {
             throw new RuntimeException('PDF page belongs to another book');
         }
         $prefix = 'orders/'.$run->order_id.'/codex-scenes/'.$sourceId.'/';
-        if (! in_array($scene['path'] ?? '', [$prefix.'scene-'.sprintf('%02d', $number).'.png', $prefix.'page-'.sprintf('%02d', $number).'-a4.png'], true)) {
+        if (! in_array($scene['path'] ?? '', [$prefix.'scene-'.sprintf('%02d', $sourceNumber).'.png', $prefix.'page-'.sprintf('%02d', $sourceNumber).'-a4.png'], true)) {
             throw new RuntimeException('PDF page path mismatch');
         }
         $bytes = Storage::disk('s3_private')->get($scene['path']);

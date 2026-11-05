@@ -120,12 +120,12 @@ class BookPageService
         };
     }
 
-    public function fingerprint(CodexSceneRun $run): string
+    public function fingerprint(CodexSceneRun $run, bool $pausedResume = false): string
     {
         $item = OrderItem::where('order_id', $run->order_id)->findOrFail($run->order_item_id);
         $manifest = isset($run->snapshot['legacy_approval_id']) ? null : OrderReviewManifest::findOrFail($run->snapshot['manifest_id']);
 
-        return hash('sha256', json_encode($this->approvedInputs($item, $manifest), JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode($this->approvedInputs($item, $manifest, $pausedResume), JSON_THROW_ON_ERROR));
     }
 
     public function statusEligible(Order $order, bool $explicit = false): bool
