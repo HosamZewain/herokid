@@ -56,7 +56,8 @@ class StoryPreviewRecovery
             && DB::table('order_automation_controls')->where('checkout_key', $key)->where('state', 'paused')->exists()
             && $stories->isNotEmpty() && ($stories->contains(fn ($row) => ! in_array($row->id, $run->context['order_ids'], true)
                 || ! in_array($row->story_id, $run->context['story_ids'], true)
-                || ($originals->has($row->id) && data_get($originals[$row->id]->context, 'story_id') !== $row->story_id))
+                || ($originals->has($row->id) && data_get($originals[$row->id]->context, 'story_id') !== null
+                    && (int) data_get($originals[$row->id]->context, 'story_id') !== (int) $row->story_id))
                 || Order::onlyTrashed()->where('checkout_group_key', $key)->whereIn('id', $run->context['order_ids'])->whereNotNull('story_id')->exists());
     }
 

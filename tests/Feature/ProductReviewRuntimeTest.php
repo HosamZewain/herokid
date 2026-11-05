@@ -59,6 +59,7 @@ use App\Services\OrderAutomation\Process\ProcessProductReview;
 use App\Services\OrderAutomation\Process\ProcessResponsePoller;
 use App\Services\OrderAutomation\Process\ProcessRuntime;
 use App\Services\OrderAutomation\Process\ProcessTemplates;
+use App\Services\Orders\ApprovedIdentityRecovery;
 use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\BookPromptSync;
@@ -66,11 +67,14 @@ use App\Services\Orders\CustomerPreviewPage;
 use App\Services\Orders\LegacyBookAdmission;
 use App\Services\Orders\ManualBookCoverApproval;
 use App\Services\Orders\ManualProductArtwork;
+use App\Services\Orders\OrderApprovedChildIdentityUploadService;
 use App\Services\Orders\OrderAutomationGuidance;
 use App\Services\Orders\OrderAutomationSummary;
 use App\Services\Orders\OrderProductPreviewImageService;
 use App\Services\Orders\OrderProductPreviewService;
+use App\Services\Orders\OrderSceneTextService;
 use App\Services\Orders\ProductProductionPromptSyncService;
+use App\Services\Orders\StaffPreviewApproval;
 use App\Services\Orders\StaffPreviewInputs;
 use App\Services\Orders\StoryPreviewRecovery;
 use App\Services\ProductAutomation\BookCatalog;
@@ -799,14 +803,14 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertSame('waiting_response', $run->fresh()->status, $run->fresh()->error_code ?? '');
     }
 
-    private function reply(OrderProcessRun $run): WhatsAppConversation
+    private function reply(OrderProcessRun $run, string $text = 'تأكيد المعاينة'): WhatsAppConversation
     {
         $conversation = WhatsAppConversation::create(['account_key' => $run->account_key, 'phone_hash' => $run->phone_hash, 'phone' => '+201000000001']);
         $base = ['remote_id' => 'template', 'remote_hash' => hash('sha256', 'template'), 'fingerprint' => hash('sha256', 'template'), 'direction' => 'outbound', 'body' => 'معاينة', 'kind' => 'text', 'sent_at' => now(),
             'provider_metadata' => ['contract_fields_present' => true, 'channelId' => 'wamid.review', 'replyTo' => null, 'templateName' => ProcessTemplates::REVIEW, 'interactionId' => 'review-interaction']];
         $conversation->messages()->create($base);
         $this->travel(3)->seconds();
-        $conversation->messages()->create(array_replace($base, ['remote_id' => 'reply', 'remote_hash' => hash('sha256', 'reply'), 'fingerprint' => hash('sha256', 'reply'), 'direction' => 'inbound', 'body' => 'تأكيد المعاينة', 'sent_at' => now(),
+        $conversation->messages()->create(array_replace($base, ['remote_id' => 'reply', 'remote_hash' => hash('sha256', 'reply'), 'fingerprint' => hash('sha256', 'reply'), 'direction' => 'inbound', 'body' => $text, 'sent_at' => now(),
             'provider_metadata' => ['contract_fields_present' => true, 'channelId' => 'wamid.answer', 'replyTo' => 'wamid.review', 'templateName' => null, 'interactionId' => 'review-interaction']]));
         app(ProcessResponsePoller::class)->process($conversation);
         app(ProcessResponsePoller::class)->process($conversation);
@@ -992,6 +996,315 @@ class ProductReviewRuntimeTest extends TestCase
         $item->order->updateQuietly(['printing_status' => 'completed']);
         $this->post(route('admin.orders.workspace.admit', $item->order), $payload)->assertSessionHasErrors('automation');
         $this->assertDatabaseCount('order_process_runs', 0);
+        Http::assertNothingSent();
+    }
+
+    private function approvedIdentityRecoveryFixture(bool $paid = true, bool $mixed = false): array
+    {
+        $book = $mixed ? $this->book() : null;
+        $story = Story::create(['title' => 'Synthetic identity replacement', 'slug' => 'identity-recovery-story', 'language' => 'ar', 'gender' => 'both', 'price' => 100, 'active' => true]);
+        $order = Order::create(['order_number' => 'SYN-IDENTITY-RECOVERY', 'checkout_group_key' => $book?->order->checkoutGroupKey() ?? (string) Str::uuid(),
+            'story_id' => $story->id, 'parent_name' => 'Synthetic', 'child_name' => 'Synthetic child', 'child_age' => 7, 'child_gender' => 'girl',
+            'status' => 'new', 'uploaded_photos' => ['child-photos/synthetic.png'], 'delivery_details' => ['phone' => '01000000001']]);
+        $order->items()->create(['item_type' => 'story', 'story_id' => $story->id, 'title' => $story->title, 'quantity' => 1, 'unit_price_cents' => 10000, 'total_price_cents' => 10000]);
+        if ($book) {
+            $book->order->update(['status' => 'new_confirmed']);
+        }
+        $run = $this->enroll($order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->times($mixed ? 2 : 1)->andReturn(new GptImageResult($this->png, 'png', 'image/png', 'synthetic-identity-recovery', [], []));
+        if ($book) {
+            app(PuzzleAutomation::class)->generate(PuzzleGeneration::sole()->id);
+        }
+        app(ProcessIdentityService::class)->generate($run->identities()->sole()->id);
+        $this->send($run);
+        $this->reply($run, 'طلب تعديل المعاينة');
+        $this->assertSame('waiting_staff', $run->fresh()->status);
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $this->actingAs($admin);
+        $version = DB::table('order_automation_controls')->where('checkout_key', $run->checkout_key)->value('version');
+        app(AutomationControl::class)->pause($order->fresh(), $admin, Request::create('/'), $version, 'Synthetic identity replacement');
+        $this->assertSame('paused', $run->fresh()->status);
+        $manifest = OrderReviewManifest::sole();
+        $attempt = app(OrderApprovedChildIdentityUploadService::class)->upload($order->fresh(), UploadedFile::fake()->createWithContent('synthetic-approved.png', $this->png(9)), $admin);
+        $order->refresh()->update(['status' => 'costomer_confirmed', 'paid_amount_cents' => $paid ? 100 : 0, 'payment_status' => $paid ? 'partially_paid' : 'not_paid']);
+        Http::fake();
+        $this->mock(GptImageClient::class)->shouldNotReceive('generate');
+
+        return [$order->fresh(), $run->fresh(), $manifest, $attempt, $admin, $book];
+    }
+
+    private function approvedIdentityRecoveryPayload(Order $order): array
+    {
+        $service = app(ApprovedIdentityRecovery::class);
+
+        return ['confirm' => 1, 'preview_token' => $service->token($service->plan($order->fresh()))];
+    }
+
+    public function test_approved_identity_recovery_keeps_the_rejected_preview_and_resumes_only_the_exact_replacement(): void
+    {
+        [$order, $previous, $manifest, $attempt, $admin] = $this->approvedIdentityRecoveryFixture();
+        $oldManifest = $manifest->getRawOriginal();
+        $oldIdentity = $previous->identities()->sole()->getRawOriginal();
+        $responses = DB::table('order_process_responses')->get()->toJson();
+        $messages = DB::table('order_process_message_attempts')->get()->toJson();
+        $payload = $this->approvedIdentityRecoveryPayload($order);
+        $url = route('admin.orders.workspace.identity-recover', $order);
+        $this->post($url, $payload)->assertSessionHasNoErrors()->assertRedirect();
+        $current = OrderProcessRun::latest('id')->first();
+        $this->assertNotSame($previous->id, $current->id);
+        $this->assertSame('cancelled', $previous->fresh()->status);
+        $this->assertSame('waiting_staff', $current->status);
+        $this->assertSame($oldManifest, $manifest->fresh()->getRawOriginal());
+        $this->assertSame($oldIdentity, $previous->identities()->sole()->getRawOriginal());
+        $this->assertSame($responses, DB::table('order_process_responses')->get()->toJson());
+        $this->assertSame($messages, DB::table('order_process_message_attempts')->get()->toJson());
+        $this->assertSame($attempt->id, $current->identities()->sole()->attempt_id);
+        $newManifest = OrderReviewManifest::where('run_id', $current->id)->sole();
+        $this->assertSame($attempt->id, $newManifest->images[0]['attempt_id']);
+        $this->assertNotNull($newManifest->approved_at);
+        $this->assertNull($newManifest->response_message_id);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 1);
+        $this->assertSame(0, $current->steps()->where('type', 'whatsapp')->count());
+        $this->assertSame('running', DB::table('order_automation_controls')->value('state'));
+        $this->assertDatabaseCount('order_automation_holds', 0);
+        $this->assertSame($attempt->id, $order->fresh()->child_identity_approved_attempt_id);
+        $this->assertSame(100, $order->fresh()->paid_amount_cents);
+        $this->assertTrue(app(ProcessIdentityService::class)->ready($current));
+        $this->assertSame($previous->id, $current->context['identity_recovery']['source_run_id']);
+        $this->post($url, $payload)->assertSessionHasErrors('identity_recovery');
+        $this->assertDatabaseCount('order_process_runs', 2);
+        $this->assertDatabaseCount('order_review_manifests', 2);
+        $this->assertDatabaseHas('admin_activity_logs', ['action' => 'order.approved_identity_recovered']);
+        $this->mock(OrderSceneTextService::class)->shouldReceive('present')->andReturn(['all_ready' => true,
+            'scenes' => array_map(fn ($n) => ['scene_number' => $n, 'title' => 'Synthetic '.$n, 'text' => 'Synthetic scene '.$n, 'complete' => true], range(1, 13))]);
+        $pages = app(ManualSceneService::class)->start($order->fresh(), $admin);
+        $this->assertSame('waiting_slot', $pages->status);
+        $this->assertSame($attempt->output_checksum, $pages->snapshot['identity_checksum']);
+        $this->assertSame($attempt->output_storage_path, $pages->snapshot['identity_path']);
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_replaces_dead_end_actions_without_changing_the_order_on_get(): void
+    {
+        [$order, $run] = $this->approvedIdentityRecoveryFixture();
+        $this->assertFalse(app(StoryPreviewRecovery::class)->candidate($order));
+        $before = $run->getRawOriginal();
+        $this->get(route('admin.orders.groups.show', $order))->assertOk()
+            ->assertSee('مراجعة الهوية المعتمدة الجديدة واستكمال الطلب')->assertDontSee('استكمال بعد تغيير القصة')
+            ->assertDontSee('رفعت المعاينات يدويًا بعد تعثر التوليد؟')->assertDontSee('>تسجيل الموافقة واستكمال الطلب<', false);
+        $page = route('admin.orders.workspace.identity-recovery', $order);
+        $this->get($page)->assertOk()->assertSee('تسجيل الموافقة على الهوية الحالية واستكمال الطلب');
+        $this->get(route('admin.orders.workspace.story-recovery', $order))->assertRedirect($page);
+        $this->get(route('admin.orders.workspace.manual-artwork', $order))->assertRedirect($page);
+        $this->assertSame($before, $run->fresh()->getRawOriginal());
+        $this->assertDatabaseCount('order_review_manifests', 1);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 0);
+        $payload = $this->approvedIdentityRecoveryPayload($order);
+        unset($payload['confirm']);
+        $this->post(route('admin.orders.workspace.identity-recover', $order), $payload)->assertSessionHasErrors('confirm');
+        $this->assertDatabaseCount('order_process_runs', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_makes_the_paid_replacement_eligible_for_normal_autopilot_admission(): void
+    {
+        [$order, $previous, $manifest, $attempt] = $this->approvedIdentityRecoveryFixture();
+        $this->post(route('admin.orders.workspace.identity-recover', $order), $this->approvedIdentityRecoveryPayload($order))->assertSessionHasNoErrors();
+        $this->mock(OrderSceneTextService::class)->shouldReceive('present')->andReturn(['all_ready' => true,
+            'scenes' => array_map(fn ($n) => ['scene_number' => $n, 'title' => 'Synthetic '.$n, 'text' => 'Synthetic scene '.$n, 'complete' => true], range(1, 13))]);
+        config(['codex_scenes.automatic' => true]);
+        $this->enableSyntheticExecution(['start_story_scene_generation']);
+        $state = app(ContextObserver::class)->observe($order->checkoutGroupKey());
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame(1, app(ProductionExecutor::class)->dispatchPass()['admitted'], json_encode([
+            'targets' => app(CapabilityRegistry::class)->targets($state->snapshot),
+            'receipts' => AiProductionExecution::get(['status', 'reason_code'])->toArray(),
+            'decisions' => DB::table('ai_order_decisions')->get(['decision'])->toArray(),
+        ]));
+        $pages = CodexSceneRun::sole();
+        $this->assertSame('waiting_slot', $pages->status);
+        $this->assertSame($attempt->output_checksum, $pages->snapshot['identity_checksum']);
+        $this->assertSame($attempt->output_storage_path, $pages->snapshot['identity_path']);
+        $this->assertDatabaseCount('child_identity_generation_attempts', 2);
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_consent_cannot_hide_a_later_response_or_a_different_manifest(): void
+    {
+        [$order] = $this->approvedIdentityRecoveryFixture();
+        $builder = app(OrderContextBuilder::class);
+        $this->assertTrue($builder->build($order->checkoutGroupKey())['change_requested']);
+        $this->post(route('admin.orders.workspace.identity-recover', $order), $this->approvedIdentityRecoveryPayload($order))->assertSessionHasNoErrors();
+        $this->assertFalse($builder->build($order->checkoutGroupKey())['change_requested']);
+        $manifest = OrderReviewManifest::latest('id')->first();
+        $fingerprint = $manifest->fingerprint;
+        $manifest->update(['fingerprint' => str_repeat('e', 64)]);
+        $this->assertTrue($builder->build($order->checkoutGroupKey())['change_requested']);
+        $manifest->update(['fingerprint' => $fingerprint]);
+        $this->assertFalse($builder->build($order->checkoutGroupKey())['change_requested']);
+        $message = WhatsAppConversation::sole()->messages()->create(['remote_id' => 'later-rejection', 'remote_hash' => hash('sha256', 'later-rejection'),
+            'fingerprint' => hash('sha256', 'later-rejection'), 'direction' => 'inbound', 'body' => 'Synthetic later rejection', 'kind' => 'text', 'sent_at' => now()]);
+        DB::table('order_process_responses')->insert(['run_id' => $manifest->run_id,
+            'step_id' => $manifest->run->steps()->where('type', 'wait_response')->sole()->id, 'message_id' => $message->id,
+            'decision' => 'revise_preview', 'created_at' => now(), 'updated_at' => now()]);
+        $this->assertTrue($builder->build($order->checkoutGroupKey())['change_requested']);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        $this->assertDatabaseCount('order_process_responses', 2);
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_preserves_mixed_sibling_artwork_and_per_order_status_proof(): void
+    {
+        [$order, $previous, $manifest, $attempt, $admin, $book] = $this->approvedIdentityRecoveryFixture(mixed: true);
+        $generation = PuzzleGeneration::sole()->getRawOriginal();
+        $productImage = collect($manifest->images)->firstWhere('item_id', $book->id);
+        $this->post(route('admin.orders.workspace.identity-recover', $order), $this->approvedIdentityRecoveryPayload($order))->assertSessionHasNoErrors();
+        $new = OrderReviewManifest::latest('id')->first();
+        $this->assertSame($productImage, collect($new->images)->firstWhere('item_id', $book->id));
+        $this->assertSame($generation, PuzzleGeneration::sole()->getRawOriginal());
+        $this->assertSame(2, $new->run->identities()->count() + count(app(StaffPreviewInputs::class)->capture($new)));
+        $this->assertSame($attempt->id, $order->fresh()->child_identity_approved_attempt_id);
+        $this->assertDatabaseCount('puzzle_generations', 1);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_does_not_record_money_or_generate_unpaid_story_scenes(): void
+    {
+        [$order] = $this->approvedIdentityRecoveryFixture(paid: false);
+        $this->post(route('admin.orders.workspace.identity-recover', $order), $this->approvedIdentityRecoveryPayload($order))->assertSessionHasNoErrors();
+        $this->assertSame(0, $order->fresh()->paid_amount_cents);
+        $this->assertStringContainsString('مبلغ مدفوع', app(ManualSceneService::class)->reason($order->fresh()));
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_rejects_changed_child_contact_story_and_photos_without_rebasing(): void
+    {
+        [$order, $run, $manifest] = $this->approvedIdentityRecoveryFixture();
+        $payload = $this->approvedIdentityRecoveryPayload($order);
+        $url = route('admin.orders.workspace.identity-recover', $order);
+        $original = $order->getAttributes();
+        foreach ([['child_name' => 'Another synthetic child'], ['child_age' => 8], ['delivery_details' => ['phone' => '01000000002']], ['uploaded_photos' => []], ['story_id' => null]] as $edit) {
+            $order->forceFill($edit)->saveQuietly();
+            $this->post($url, $payload)->assertSessionHasErrors('identity_recovery');
+            $order->setRawAttributes($original, true)->saveQuietly();
+            DB::table('orders')->where('id', $order->id)->update(array_intersect_key($original, $edit));
+            $order->refresh();
+            $this->assertDatabaseCount('order_process_runs', 1);
+            $this->assertNull($manifest->fresh()->approved_at);
+            $this->assertSame('paused', $run->fresh()->status);
+        }
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_rejects_stale_file_selection_control_version_and_unsettled_work(): void
+    {
+        [$order, $run, $manifest, $attempt] = $this->approvedIdentityRecoveryFixture();
+        $payload = $this->approvedIdentityRecoveryPayload($order);
+        $url = route('admin.orders.workspace.identity-recover', $order);
+        DB::table('order_automation_controls')->increment('version');
+        $this->post($url, $payload)->assertStatus(409);
+        $payload = $this->approvedIdentityRecoveryPayload($order);
+        $sent = $run->steps()->where('type', 'whatsapp')->sole()->messageAttempts()->sole();
+        $sent->update(['status' => 'uncertain']);
+        $this->post($url, $payload)->assertSessionHasErrors('identity_recovery');
+        $sent->update(['status' => 'completed']);
+        Storage::disk($attempt->output_disk)->put($attempt->output_storage_path, $this->png(12));
+        $this->post($url, $payload)->assertSessionHasErrors('identity_recovery');
+        $this->assertSame('paused', $run->fresh()->status);
+        $this->assertNull($manifest->fresh()->approved_at);
+        $this->assertDatabaseCount('order_process_runs', 1);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_requires_current_assignment_and_photo_permissions(): void
+    {
+        [$order] = $this->approvedIdentityRecoveryFixture();
+        $payload = $this->approvedIdentityRecoveryPayload($order);
+        $staff = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $staff->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.automation.control', 'orders.production_prompt.manage'])->pluck('id'));
+        $this->actingAs($staff)->get(route('admin.orders.workspace.identity-recovery', $order))->assertForbidden();
+        $this->post(route('admin.orders.workspace.identity-recover', $order), $payload)->assertForbidden();
+        $staff->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.photos.view', 'orders.automation.control', 'orders.production_prompt.manage'])->pluck('id'));
+        $this->actingAs($staff->fresh())->post(route('admin.orders.workspace.identity-recover', $order), $payload)->assertForbidden();
+        $this->assertDatabaseCount('order_process_runs', 1);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_allows_only_the_assigned_staff_and_keeps_native_enrollment_closed(): void
+    {
+        [$order, $run] = $this->approvedIdentityRecoveryFixture();
+        $payload = $this->approvedIdentityRecoveryPayload($order);
+        $staff = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $staff->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.photos.view', 'orders.automation.control', 'orders.production_prompt.manage'])->pluck('id'));
+        DB::table('order_group_assignments')->insert(['checkout_group_key' => $run->checkout_key, 'assigned_to_user_id' => $staff->id, 'assigned_by_user_id' => $staff->id, 'assigned_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        $this->actingAs($staff)->post(route('admin.orders.workspace.identity-recover', $order), $payload)->assertSessionHasNoErrors();
+        $current = OrderProcessRun::latest('id')->first();
+        try {
+            app(ProcessIdentityService::class)->preflight($current, $current->revision->definition['nodes'][0]['config']);
+            $this->fail('Recovery must never reopen native identity enrollment.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('identity_already_claimed', $e->getMessage());
+        }
+        $this->assertDatabaseCount('child_identity_generation_attempts', 2);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_rejects_a_new_upload_after_selection_and_a_foreign_identity(): void
+    {
+        [$order, $run, $manifest, $attempt, $admin] = $this->approvedIdentityRecoveryFixture();
+        $payload = $this->approvedIdentityRecoveryPayload($order);
+        $replacement = app(OrderApprovedChildIdentityUploadService::class)->upload($order->fresh(), UploadedFile::fake()->createWithContent('second-approved.png', $this->png(10)), $admin);
+        $url = route('admin.orders.workspace.identity-recover', $order);
+        $this->post($url, $payload)->assertStatus(409);
+        $payload = $this->approvedIdentityRecoveryPayload($order);
+        $foreignOrder = $this->book()->order;
+        $replacement->identityRequest->update(['converted_order_id' => $foreignOrder->id]);
+        $this->post($url, $payload)->assertSessionHasErrors('identity_recovery');
+        $this->assertSame('paused', $run->fresh()->status);
+        $this->assertNull($manifest->fresh()->approved_at);
+        $this->assertDatabaseCount('order_process_runs', 1);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 0);
+        $this->assertSame($replacement->id, $order->fresh()->child_identity_approved_attempt_id);
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_readiness_cannot_accept_the_old_attempt_after_manual_replacement(): void
+    {
+        [$order, $run, $manifest, $attempt] = $this->approvedIdentityRecoveryFixture();
+        try {
+            app(ProcessIdentityService::class)->ready($run);
+            $this->fail('An approved replacement must not make the rejected old preview ready.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('identity_requires_review', $e->getMessage());
+        }
+        $payload = $this->approvedIdentityRecoveryPayload($order);
+        $request = $attempt->identityRequest;
+        $request->update(['approved_attempt_id' => null]);
+        $this->post(route('admin.orders.workspace.identity-recover', $order), $payload)->assertSessionHasErrors('identity_recovery');
+        $this->assertDatabaseCount('order_process_runs', 1);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 0);
+        $this->assertNull($manifest->fresh()->approved_at);
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_identity_recovery_rolls_back_everything_if_native_approval_fails(): void
+    {
+        [$order, $run, $manifest, $attempt] = $this->approvedIdentityRecoveryFixture();
+        $payload = $this->approvedIdentityRecoveryPayload($order);
+        $this->mock(StaffPreviewApproval::class)->shouldReceive('approve')->once()->andThrow(new \RuntimeException('synthetic_approval_failure'));
+        $this->post(route('admin.orders.workspace.identity-recover', $order), $payload)->assertSessionHasErrors('identity_recovery');
+        $this->assertSame('paused', $run->fresh()->status);
+        $this->assertNull($manifest->fresh()->approved_at);
+        $this->assertSame($attempt->id, $order->fresh()->child_identity_approved_attempt_id);
+        $this->assertDatabaseCount('order_process_runs', 1);
+        $this->assertDatabaseCount('order_review_manifests', 1);
+        $this->assertDatabaseCount('order_preview_staff_approvals', 0);
+        $this->assertDatabaseCount('order_automation_holds', 1);
         Http::assertNothingSent();
     }
 

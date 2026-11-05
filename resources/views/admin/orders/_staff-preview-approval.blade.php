@@ -4,8 +4,15 @@
         && auth()->user()->hasPermission('orders.production_prompt.manage')
         && app(\App\Services\Orders\OrderAccess::class)->controls($approvalOrder, auth()->user());
     $approvalManifest = $canApprovePreview ? \App\Models\OrderReviewManifest::where('checkout_key', $approvalOrder->checkoutGroupKey())->latest('id')->with('run')->first() : null;
+    $identityReplacement = $canApprovePreview && app(\App\Services\Orders\ApprovedIdentityRecovery::class)->candidate($approvalOrder);
 @endphp
-@if($approvalManifest && !\App\Models\CodexSceneRun::where('checkout_key', $approvalOrder->checkoutGroupKey())->exists())
+@if($identityReplacement)
+    <section class="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4" id="approved-identity-recovery">
+        <p class="font-bold">الهوية المعتمدة الحالية أحدث من المعاينة السابقة.</p>
+        <p class="my-2 text-sm">راجع الهوية البديلة والصور الحالية ثم سجّل موافقة العميل عليها لاستكمال المتبقي المؤهل. النسخة السابقة محفوظة.</p>
+        <a class="inline-block rounded-lg bg-indigo-700 px-4 py-2 font-bold text-white" href="{{ route('admin.orders.workspace.identity-recovery', $approvalOrder) }}">مراجعة الهوية المعتمدة الجديدة واستكمال الطلب</a>
+    </section>
+@elseif($approvalManifest && !\App\Models\CodexSceneRun::where('checkout_key', $approvalOrder->checkoutGroupKey())->exists())
     @php
         $approvalControlVersion = \Illuminate\Support\Facades\DB::table('order_automation_controls')->where('checkout_key', $approvalOrder->checkoutGroupKey())->value('version') ?? 1;
         $approvalInputs = null;

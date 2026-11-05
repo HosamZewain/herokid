@@ -11,6 +11,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\CodexScenes\BookPageService;
 use App\Services\Orders\AdminOrderGroupService;
+use App\Services\Orders\ApprovedIdentityRecovery;
 use App\Services\Orders\AutomationControl;
 use App\Services\Orders\ManualProductArtwork;
 use App\Services\Orders\OrderAccess;
@@ -35,6 +36,9 @@ class OrderWorkspaceController extends Controller
     public function manualArtwork(Request $request, Order $order, ManualProductArtwork $artwork)
     {
         $artwork->authorize($order, $request->user());
+        if (app(ApprovedIdentityRecovery::class)->candidate($order)) {
+            return redirect()->route('admin.orders.workspace.identity-recovery', $order);
+        }
         $offers = [];
         $error = null;
         try {
@@ -65,6 +69,9 @@ class OrderWorkspaceController extends Controller
     public function storyRecovery(Request $request, Order $order, StoryPreviewRecovery $recovery)
     {
         $recovery->authorize($order, $request->user());
+        if (! $recovery->candidate($order) && app(ApprovedIdentityRecovery::class)->candidate($order)) {
+            return redirect()->route('admin.orders.workspace.identity-recovery', $order);
+        }
         $plan = null;
         $error = null;
         try {
@@ -76,6 +83,37 @@ class OrderWorkspaceController extends Controller
         }
 
         return view('admin.orders.story-recovery', compact('order', 'plan', 'error'));
+    }
+
+    public function identityRecovery(Request $request, Order $order, ApprovedIdentityRecovery $recovery)
+    {
+        $recovery->authorize($order, $request->user());
+        $plan = null;
+        $error = null;
+        try {
+            $plan = $recovery->plan($order);
+        } catch (ValidationException $e) {
+            $error = collect($e->errors())->flatten()->first();
+        } catch (\RuntimeException) {
+            $error = 'تعذر التحقق من الهوية أو صور المعاينة الحالية؛ راجع الملفات وارتباطها بهذه القصة قبل الاستكمال.';
+        }
+
+        return view('admin.orders.identity-recovery', compact('order', 'plan', 'error'));
+    }
+
+    public function recoverApprovedIdentity(Request $request, Order $order, ApprovedIdentityRecovery $recovery)
+    {
+        $recovery->authorize($order, $request->user());
+        $data = $request->validate(['confirm' => 'required|accepted', 'preview_token' => 'required|string|max:10000']);
+        try {
+            $recovery->approve($order, $request->user(), $request, $data['preview_token']);
+        } catch (HttpExceptionInterface $e) {
+            throw $e;
+        } catch (\RuntimeException) {
+            throw ValidationException::withMessages(['identity_recovery' => 'تعذر ربط الهوية بالمعاينة الحالية؛ لم يُسجل اعتماد جزئي. راجع الصورة وبيانات الطلب.']);
+        }
+
+        return redirect()->route('admin.orders.groups.show', $order)->with('success', 'تم ربط الهوية المعتمدة بالمعاينة الحالية وتسجيل موافقة العميل مع حفظ النسخة السابقة. يستكمل المتبقي المؤهل حسب الدفعة المسجلة دون إعادة توليد الهوية أو إرسال المعاينة.');
     }
 
     public function recoverStory(Request $request, Order $order, StoryPreviewRecovery $recovery)

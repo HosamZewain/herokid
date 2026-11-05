@@ -74,6 +74,11 @@ class OrderContextBuilder
         $latestResponse = $responses->last();
         $manifest = OrderReviewManifest::where('checkout_key', $key)->latest('id')->first();
         $staffApproval = $manifest ? OrderPreviewStaffApproval::where('manifest_id', $manifest->id)->latest('id')->first() : null;
+        $consent = $manifest?->run?->context['staff_preview_approval'] ?? [];
+        $staffSettledResponse = $manifest?->approved_at && $staffApproval
+            && hash_equals($manifest->fingerprint, $staffApproval->fingerprint)
+            && ($consent['manifest_id'] ?? null) === $manifest->id && ($consent['approval_id'] ?? null) === $staffApproval->id
+            && $latestResponse && $latestResponse->id <= ($consent['response_checkpoint_id'] ?? 0);
         $staffInputs = $manifest ? app(StaffPreviewInputs::class)->recorded($manifest) : [];
         $control = DB::table('order_automation_controls')->where('checkout_key', $key)->first(['state', 'version']);
         $confirmation = RoboDeskIntegrationEvent::where('checkout_group_key', $key)->where('event_type', 'order.pending_confirmation')->latest('id')->first();
@@ -96,7 +101,8 @@ class OrderContextBuilder
             'confirmation' => ['required' => $live->contains('status', 'new'), 'status' => $confirmation?->status,
                 'sendable' => $confirmation ? app(OrderConfirmationService::class)->canSend($confirmation) : false],
             'customer_interactions' => $responses->map(fn ($r) => ['response_ref' => 'response:'.$r->id, 'run_ref' => 'process:'.$r->run_id, 'decision' => $r->decision])->all(),
-            'change_requested' => $latestResponse && in_array($latestResponse->decision, ['revise_identity', 'revise_preview', 'request_changes', 'reject'], true),
+            'change_requested' => $latestResponse && ! $staffSettledResponse
+                && in_array($latestResponse->decision, ['revise_identity', 'revise_preview', 'request_changes', 'reject'], true),
             'process_runs' => $runs->map(fn ($r) => ['run_ref' => 'process:'.$r->id, 'status' => $r->status, 'version' => $r->version,
                 'node' => $r->node_id, 'enabled' => (bool) $r->automation?->enabled, 'accepts_new_runs' => (bool) $r->automation?->accepts_new_runs,
                 'deadline_elapsed' => $r->wait_until?->isPast() ?? false])->all(),

@@ -11,7 +11,7 @@ use RuntimeException;
 
 class ProcessOrderContext
 {
-    public const METADATA = ['actor_id', 'supersedes_run_id', 'story_recovery'];
+    public const METADATA = ['actor_id', 'supersedes_run_id', 'story_recovery', 'identity_recovery', 'staff_preview_approval'];
 
     /** Only an explicit story-revision run may exclude its reviewed archived stories. */
     public function forRun(OrderProcessRun $run, bool $lock = false): Collection
@@ -82,7 +82,7 @@ class ProcessOrderContext
             unset($fact);
         }
 
-        return ['fingerprint_version' => $version, 'order_ids' => $orders->pluck('id')->all(), 'phone' => $phones->first(), 'status' => $status->count() === 1 ? $status->first() : 'mixed',
+        return ['fingerprint_version' => $version, 'order_ids' => $orders->pluck('id')->all(), 'order_statuses' => $orders->pluck('status', 'id')->all(), 'phone' => $phones->first(), 'status' => $status->count() === 1 ? $status->first() : 'mixed',
             'type' => $types->count() === 1 ? $types->first() : 'mixed', 'fingerprint' => hash('sha256', json_encode([$facts, $lines], JSON_THROW_ON_ERROR)),
             'story_ids' => $orders->pluck('story_id')->filter()->unique()->values()->all(), 'product_ids' => collect($lines)->pluck('product_id')->filter()->unique()->values()->all()];
     }

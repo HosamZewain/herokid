@@ -68,12 +68,15 @@ class StaffPreviewApproval
             $contexts = app(ProcessOrderContext::class);
             $comparison = $rows->map(function ($row) use ($run) {
                 $copy = clone $row;
-                $copy->status = $run->context['status'];
+                $copy->status = $run->context['order_statuses'][$row->id] ?? $run->context['status'];
 
                 return $copy;
             });
             $snapshot = $contexts->snapshot($comparison, (int) ($run->context['fingerprint_version'] ?? 1));
             if (! hash_equals($run->context['fingerprint'], $snapshot['fingerprint'])) {
+                if (app(ApprovedIdentityRecovery::class)->candidate($order)) {
+                    $deny('الهوية المعتمدة أحدث من هذه المعاينة. استخدم «مراجعة الهوية المعتمدة الجديدة واستكمال الطلب» لمراجعة النسخة الحالية وتسجيل موافقتها.');
+                }
                 $deny('تغيرت بيانات الطلب بعد المعاينة. جهّز نسخة معاينة محدثة للعميل قبل تسجيل موافقته.');
             }
             try {
@@ -98,6 +101,12 @@ class StaffPreviewApproval
             $approval = OrderPreviewStaffApproval::create(['manifest_id' => $manifest->id, 'fingerprint' => $manifest->fingerprint,
                 'user_id' => $actor->id, 'channel' => $data['channel'], 'note' => trim($data['note']), 'production_inputs' => $inputs]);
             app(ProcessProductReview::class)->approve($run, $approvalNode['config'], $approval);
+            // Explicit staff consent settles only responses already present under
+            // the checkout/run locks. Any later customer rejection still blocks AI.
+            $context = $run->context;
+            $context['staff_preview_approval'] = ['approval_id' => $approval->id, 'manifest_id' => $manifest->id,
+                'response_checkpoint_id' => (int) DB::table('order_process_responses')->whereIn('run_id', $runs->modelKeys())->max('id')];
+            $run->context = $context;
             // Settle the existing preview wait directly. Never replay the send, invent
             // a customer message, or execute arbitrary nodes from a historical path.
             $response->update(['status' => 'completed', 'completed_at' => now()]);

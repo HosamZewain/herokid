@@ -6,7 +6,9 @@ use App\DTOs\Ai\GptImageRequest;
 use App\Exceptions\GptImageException;
 use App\Jobs\GenerateProcessIdentity;
 use App\Models\AiModel;
+use App\Models\ChildIdentityGenerationAttempt;
 use App\Models\ChildIdentityRequest;
+use App\Models\Order;
 use App\Models\OrderAutomationRun;
 use App\Models\OrderPreviewStaffApproval;
 use App\Models\OrderProcessIdentity;
@@ -295,7 +297,9 @@ class ProcessIdentityService
         if ($ready) {
             foreach ($tasks as $task) {
                 try {
-                    $current = app(WorkflowInputs::class)->capture($task->order, $this->inputDefinition());
+                    $current = $task->order->child_identity_approved_attempt_id || $task->order->childIdentityRequest?->approved_attempt_id
+                        ? $this->approvedInputs($task->order, $task->attempt)
+                        : app(WorkflowInputs::class)->capture($task->order, $this->inputDefinition());
                     if (! hash_equals($task->context['fingerprint'], $current['fingerprint'])) {
                         throw new RuntimeException('inputs_changed');
                     }
@@ -312,6 +316,27 @@ class ProcessIdentityService
         }
 
         return $ready;
+    }
+
+    /** Read-only verification of this exact approved reference, never an enrollment permit. */
+    public function approvedInputs(Order $order, ChildIdentityGenerationAttempt $attempt): array
+    {
+        $identity = $order->childIdentityRequest;
+        if (! $identity || $identity->trashed() || $attempt->status !== 'succeeded'
+            || $order->child_identity_request_id !== $attempt->child_identity_request_id
+            || $order->child_identity_approved_attempt_id !== $attempt->id || $identity->approved_attempt_id !== $attempt->id
+            || (int) $identity->converted_order_id !== $order->id || (int) $identity->selected_story_id !== $order->story_id
+            || $identity->attempts()->whereIn('status', ['pending', 'processing'])->exists()
+            || $identity->orders()->withTrashed()->whereKeyNot($order->id)->exists()) {
+            throw new RuntimeException('identity_existing_review');
+        }
+        $copy = clone $order;
+        $identity = clone $identity;
+        $copy->child_identity_approved_attempt_id = null;
+        $identity->approved_attempt_id = null;
+        $copy->setRelation('childIdentityRequest', $identity);
+
+        return app(WorkflowInputs::class)->capture($copy, $this->inputDefinition());
     }
 
     public function approve(OrderProcessRun $run, array $config, string $approvalText = 'تأكيد الهوية', ?OrderPreviewStaffApproval $staffApproval = null): void

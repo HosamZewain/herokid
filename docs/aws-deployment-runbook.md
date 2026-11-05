@@ -1,5 +1,9 @@
 # HeroKid AWS deployment and agent handoff
 
+## 5 November 2026 — approved replacement identity recovery AUTHORIZED / PREPARED
+
+Owner explicitly requested completion and immediate deployment for HK11-164 and equivalent cases. Isolated `codex/identity-replacement-recovery-20261105` now based on revalidated AWS/Main **cf584eca6fad9d75c947ce77fe05eba6540a7f6f**, preserving the concurrent TikTok release. Exact replacement identity selection, atomic native staff approval, preservation of old preview/task/rejection/send evidence, current consent response checkpoint for Auto Pilot, and corrected story/manual-artwork guidance. [Case, implementation and verification boundaries](approved-identity-recovery-2026-11-05.ar.md). No schema, config, dependency, infrastructure or provider change. This preparation entry is not deployment proof; verified release/status and recovery checkpoint will be recorded after application.
+
 ## 5 November 2026 — TikTok attribution and local visits DEPLOYED
 
 Owner explicitly authorized immediate publication and supplied Pixel **DBMCCQRC77UFMFQAAO30**. Application **685b5d6f71a8dab494914538fe79d6cbdf824f98**, based on revalidated Main/AWS **5989899844f2e7b356e780445e5ff0e648cfbe37**, deployed **18:26:50UTC /20:26Cairo**. [Diagnosis, scope, tests and recovery](tiktok-tracking-2026-11-05.ar.md). Live ttclid attribution, anonymous public-commerce visit sessions, local-source report without GA4, supplied async browser pixel and validated settings field. Checkout emits PlaceAnOrder from its one-time browser receipt, not a new payment claim. No campaign/budget change, historical event import, customer messages or external API key.

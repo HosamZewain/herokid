@@ -104,7 +104,8 @@
     <div class="py-8">
         <div class="mx-auto w-full max-w-none space-y-6 px-4 sm:px-6 lg:px-8">
             @include('admin.orders._codex-generation-banner', ['generationBannerOrder' => $attachmentTarget])
-            @if(auth()->user()?->hasPermission('orders.automation.control') && auth()->user()?->hasPermission('orders.production_prompt.manage'))
+            @if(auth()->user()?->hasPermission('orders.automation.control') && auth()->user()?->hasPermission('orders.production_prompt.manage')
+                && ! $group['orders']->contains(fn ($row) => (bool) $row->story_id))
                 <a href="{{ route('admin.orders.workspace.manual-artwork', $attachmentTarget) }}" class="my-3 block font-bold text-indigo-700 underline">رفعت المعاينات يدويًا بعد تعثر التوليد؟ ربط الصور بالمنتجات واستكمال المعاينة</a>
             @endif
 
