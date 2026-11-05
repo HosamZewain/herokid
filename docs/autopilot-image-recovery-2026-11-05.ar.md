@@ -1,6 +1,6 @@
 # تعافي صور المنتجات وربط المعاينات اليدوية — 5 نوفمبر 2026
 
-الحالة: تنفيذ معزول على codex/autopilot-image-recovery-20261105، أساس AWS/Main5420bc2b94afb07b568f6610d11eb8f9e24090e2. لا تغيير إنتاجي قبل اجتياز الاختبارات والنشر. يحافظ على تعديلات الهاتف والواجهة في النسخة الرئيسية.
+الحالة: منشور منmainعلىAWSبالإصدارd50ed34a2f9db57ed395ab80023e78830a54c54f، من الأساس5420bc2b94afb07b568f6610d11eb8f9e24090e2؛ التنفيذ فيcodex/autopilot-image-recovery-20261105. يحافظ على تعديلات الهاتف والواجهة في النسخة الرئيسية.
 
 ## السبب والسلوك
 
@@ -46,3 +46,7 @@ PHP8.3 وSQLite وMySQL8.4 مع fixtureصناعي وHTTPمنع خارجي. يش�
 التغيير بلا schema/config/dependencies/assets. يلزم route/Blade cache فقط، وتحديث العمال الذين يحملونGptImageClient/DTO/السياسة بأمان بعد العمل الجاري. لا restartCodexأو قطع توليد، ولا إعادة صفوف قديمة، ولا استعادةDB. نقطة استرجاع خاصة وحفظ bytesللـenv/config/manifestوصلاحياتها، والتحقق منSHA/hash والواجهات والسجلات بعد النشر.
 
 التحقق النهائي قبل النشر:252tests/3010assertions على كل منSQLite وMySQL8.4، مع تخطي حالتي السباق في هذه المجموعة؛ مجموعة السباق المستقلة علىautopilot_syntheticنجحت2tests/9assertions. حالتاPDFالبيئيتان المذكورتان مستبعدتان صراحةً. PintوPHP8.3lintوroute:cacheوview:cacheوفحصdiffنجحوا. المعاينة المرشحة قراءةً فقط علىHK11-155تعرض3925و3926لكل من3172و3173، دون إنشاءreceiptأو توليد أو رسالة.
+
+## التحقق الإنتاجي
+
+النسخة منشورة،28hashمطابق وصلاحيات القراءة سليمة، env/config/manifest/OSبلا تغيير. تحديثroute/Bladeمع حفظ mode/ownerلكاش المسارات، دونFPMreload. تحديث أربعة عمالLaravelبعد إنهاء العمل وAutoPilot2460411؛ Codex1318728محفوظ. بعد SIGTERMنظيفًا احتاجت وحدةAutoPilotالحالية إلىstartصريح لأنهاRestart=on-failure، دون قتل المهمة الجارية. في15:08:42UTC:8خدمات وسكجولر سليمة،200HTTP/0أخطاء5xx،0Laravel/Nginx/FPMerrorsجديدة،failedjobs84بلا زيادة. GETإداري أصلي للطلب والربط ولوحةAutoPilotكلها200. HK11-155يعرض الاختيارين3925و3926لكل منتج، دون افتراض الربط الصحيح أو إرسالPOST. نقطة الاسترجاع/home/ubuntu/herokid-before-image-recovery-20261105. لا طلبات/رسائل تجريبية أو replayللقديم.
