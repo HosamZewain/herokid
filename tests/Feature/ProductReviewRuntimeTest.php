@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\DTOs\Ai\GptImageRequest;
 use App\DTOs\Ai\GptImageResult;
+use App\Exceptions\GptImageException;
 use App\Exceptions\LegacyBookReviewRequired;
 use App\Jobs\AdvanceAutoPilotMessage;
 use App\Models\AdminActivityLog;
@@ -40,6 +41,7 @@ use App\Services\Agentic\OrderContextBuilder;
 use App\Services\Agentic\ProductionExecutor;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\GptImageClient;
+use App\Services\Ai\ImageFailureClassifier;
 use App\Services\CodexScenes\BookPageRecovery;
 use App\Services\CodexScenes\BookPageService;
 use App\Services\CodexScenes\BookPdfService;
@@ -60,8 +62,10 @@ use App\Services\OrderAutomation\Process\ProcessTemplates;
 use App\Services\Orders\AutomationControl;
 use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\BookPromptSync;
+use App\Services\Orders\CustomerPreviewPage;
 use App\Services\Orders\LegacyBookAdmission;
 use App\Services\Orders\ManualBookCoverApproval;
+use App\Services\Orders\ManualProductArtwork;
 use App\Services\Orders\OrderAutomationGuidance;
 use App\Services\Orders\OrderAutomationSummary;
 use App\Services\Orders\OrderProductPreviewImageService;
@@ -83,6 +87,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
@@ -603,6 +608,187 @@ class ProductReviewRuntimeTest extends TestCase
         $this->assertSame('waiting_identity', $run->fresh()->status, $run->fresh()->error_code ?? '');
 
         return $run->fresh();
+    }
+
+    public function test_autopilot_image_recovery_resumes_only_unchanged_unsent_preview_wait(): void
+    {
+        $item = $this->book();
+        $run = $this->enroll($item->order);
+        $failure = ImageFailureClassifier::rejected(429, ['error' => ['code' => 'rate_limit_exceeded']]);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andThrow(
+            new GptImageException('Synthetic', 'rate_limit_exceeded', 'req_synthetic', true, null, $failure));
+        $parent = PuzzleGeneration::sole();
+        app(PuzzleAutomation::class)->generate($parent->id);
+        $this->travel(181)->seconds();
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertSame('blocked', $run->fresh()->status);
+        $this->assertSame('preview_product_result_review', $run->fresh()->error_code);
+        $this->enableSyntheticExecution(['generate_book_cover']);
+        $state = app(ContextObserver::class)->observe($run->checkout_key);
+        app(DecisionOrchestrator::class)->evaluatePass($state->id);
+        $this->assertSame(1, app(ProductionExecutor::class)->dispatchPass()['admitted']);
+        $child = PuzzleGeneration::latest('id')->first();
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andReturnUsing(fn (GptImageRequest $r) => $this->mixedImage($r));
+        app(PuzzleAutomation::class)->generate($child->id);
+        $this->assertSame('succeeded', $child->fresh()->status, $child->fresh()->error_code ?? '');
+        $this->assertSame('waiting_identity', $run->fresh()->status);
+        $this->assertNull($run->fresh()->error_code);
+        $this->assertDatabaseCount('order_review_manifests', 0);
+        $this->assertDatabaseCount('order_process_message_attempts', 0);
+        $this->assertSame('new_confirmed', $item->order->fresh()->status);
+        $this->assertSame('unpaid', $item->order->fresh()->payment_status);
+        $this->assertSame('blocked', $parent->fresh()->status);
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->assertDatabaseCount('order_review_manifests', 1);
+    }
+
+    private function manualArtworkFixture(): array
+    {
+        $item = $this->book();
+        $run = $this->enroll($item->order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->once()->andThrow(new \RuntimeException('Synthetic settled timeout'));
+        $parent = PuzzleGeneration::sole();
+        app(PuzzleAutomation::class)->generate($parent->id);
+        $this->travel(181)->seconds();
+        app(ProcessRuntime::class)->advance($run->id);
+        $old = $parent->fresh();
+        $providerFields = $old->only(['error_code', 'billing_status', 'provider_request_id', 'output_path', 'finished_at']);
+        $this->actor->permissions()->syncWithoutDetaching(Permission::whereIn('key', ['orders.automation.control', 'orders.view_all', 'orders.production_prompt.manage'])->pluck('id'));
+        $this->actingAs($this->actor);
+        app(AutomationControl::class)->pause($item->order, $this->actor, Request::create('/'), 1, 'manual artwork');
+        $gallery = OrderProductPreviewGallery::create(['checkout_group_key' => $run->checkout_key, 'public_token_hash' => hash('sha256', 'synthetic-manual-gallery'), 'public_token_encrypted' => Crypt::encryptString('synthetic-manual-gallery'), 'status' => 'active']);
+        Storage::disk('s3_private')->put('manual/cover.png', $this->png);
+        $preview = OrderPreview::create(['order_id' => $item->order_id, 'product_gallery_id' => $gallery->id, 'disk' => 's3_private', 'file_path' => 'manual/cover.png',
+            'original_name' => 'manual.png', 'mime_type' => 'image/png', 'file_size' => strlen($this->png)]);
+
+        return [$item, $run, $parent, $providerFields, $preview];
+    }
+
+    public function test_manual_upload_selection_retires_finished_uncertainty_and_builds_approvable_book_preview_without_ai(): void
+    {
+        [$item, $run, $parent, $providerFields, $preview] = $this->manualArtworkFixture();
+        $service = app(ManualProductArtwork::class);
+        $offers = $service->offers($item->order);
+        $token = $offers[0]['choices'][0]['token'];
+        $url = route('admin.orders.workspace.manual-artwork-adopt', $item->order);
+        $this->get(route('admin.orders.workspace.manual-artwork', $item->order))->assertOk()->assertSee('استخدام الصور المحددة');
+        $this->post($url, ['confirm' => 1, 'choices' => [$item->id => $token]])->assertSessionHasNoErrors();
+        $this->assertSame('manual_artwork', $parent->fresh()->status);
+        $this->assertEquals($providerFields, $parent->fresh()->only(array_keys($providerFields)));
+        $this->assertSame('cancelled', $run->fresh()->status);
+        $next = OrderProcessRun::latest('id')->first();
+        app(ProcessRuntime::class)->advance($next->id);
+        $this->assertSame('waiting_identity', $next->fresh()->status);
+        $this->travel(181)->seconds();
+        app(ProcessRuntime::class)->advance($next->id);
+        $manifest = OrderReviewManifest::sole();
+        $this->assertTrue($manifest->images[0]['manual_artwork']);
+        $this->assertSame($preview->id, $manifest->images[0]['preview_id']);
+        $this->assertNull($manifest->approved_at);
+        $this->assertTrue(app(CustomerPreviewPage::class)->available($manifest));
+        $inputs = app(StaffPreviewInputs::class)->capture($manifest);
+        $this->assertSame(3, $inputs[(string) $item->id]['page_count']);
+        $this->assertDatabaseCount('puzzle_generations', 1);
+        $this->assertDatabaseCount('codex_scene_runs', 0);
+        $this->assertNotNull(app(BookPageService::class)->admissionReason($item->fresh()));
+        // Synthetic consent/payment prove the selected cover reaches the normal
+        // interior executor; the selection action itself set neither of them.
+        $manifest->update(['approved_at' => now()]);
+        $next->refresh()->update(['status' => 'waiting_staff']);
+        $item->order->update(['status' => 'pending_team_review', 'payment_status' => 'partially_paid', 'paid_amount_cents' => 1]);
+        $this->assertNull(app(BookPageService::class)->admissionReason($item->fresh()));
+        $bookRun = app(BookPageService::class)->start($item->fresh(), $manifest->fresh());
+        $this->assertSame('waiting_slot', $bookRun->status);
+        $this->assertSame($preview->fresh()->checksum, $bookRun->snapshot['identity_checksum']);
+        // A stale selection cannot create another replacement or approve anything.
+        $this->post($url, ['confirm' => 1, 'choices' => [$item->id => $token]])->assertSessionHasErrors();
+        $this->assertDatabaseCount('order_process_runs', 2);
+        Http::assertNothingSent();
+    }
+
+    public function test_manual_artwork_rejects_cross_checkout_preview_and_active_lease_atomically(): void
+    {
+        [$item, $run, $parent, , $preview] = $this->manualArtworkFixture();
+        $service = app(ManualProductArtwork::class);
+        $token = $service->offers($item->order)[0]['choices'][0]['token'];
+        $foreign = $this->book();
+        $preview->update(['order_id' => $foreign->order_id]);
+        $url = route('admin.orders.workspace.manual-artwork-adopt', $item->order);
+        $this->post($url, ['confirm' => 1, 'choices' => [$item->id => $token]])->assertSessionHasErrors();
+        $this->assertSame('uncertain', $parent->fresh()->status);
+        $this->assertSame('paused', $run->fresh()->status);
+        $this->assertDatabaseCount('order_review_manifests', 0);
+        $preview->update(['order_id' => $item->order_id]);
+        $parent->update(['lease_until' => now()->addMinute()]);
+        $this->post($url, ['confirm' => 1, 'choices' => [$item->id => $token]])->assertSessionHasErrors();
+        $this->assertSame('uncertain', $parent->fresh()->status);
+        $this->assertDatabaseCount('order_process_runs', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_manual_artwork_requires_current_permission_and_version(): void
+    {
+        [$item, $run, $parent] = $this->manualArtworkFixture();
+        $service = app(ManualProductArtwork::class);
+        $token = $service->offers($item->order)[0]['choices'][0]['token'];
+        $url = route('admin.orders.workspace.manual-artwork-adopt', $item->order);
+        $run->increment('version');
+        $this->post($url, ['confirm' => 1, 'choices' => [$item->id => $token]])->assertStatus(409);
+        $this->assertSame('uncertain', $parent->fresh()->status);
+        $unprivileged = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $unprivileged->permissions()->sync(Permission::where('key', 'orders.view')->pluck('id'));
+        $this->actingAs($unprivileged)->post($url, ['confirm' => 1, 'choices' => [$item->id => $token]])->assertForbidden();
+        $this->assertDatabaseCount('order_process_runs', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_manual_artwork_two_product_selection_is_atomic_and_preserves_shared_upload_owner(): void
+    {
+        $first = $this->book();
+        $other = $first->order->replicate();
+        $other->order_number = 'SYN-'.Str::random(8);
+        $other->child_name = 'Other synthetic child';
+        $other->save();
+        $second = $this->book($other);
+        $other->updateQuietly(['status' => 'new_confirmed']);
+        $run = $this->enroll($first->order);
+        $this->mock(GptImageClient::class)->shouldReceive('generate')->twice()->andThrow(new \RuntimeException('Synthetic settled timeout'));
+        foreach (PuzzleGeneration::all() as $generation) {
+            app(PuzzleAutomation::class)->generate($generation->id);
+        }
+        $this->travel(181)->seconds();
+        app(ProcessRuntime::class)->advance($run->id);
+        $this->actor->permissions()->syncWithoutDetaching(Permission::whereIn('key', ['orders.automation.control', 'orders.view_all', 'orders.production_prompt.manage'])->pluck('id'));
+        $this->actingAs($this->actor);
+        app(AutomationControl::class)->pause($first->order, $this->actor, Request::create('/'), 1, 'manual artwork');
+        $gallery = OrderProductPreviewGallery::create(['checkout_group_key' => $run->checkout_key,
+            'public_token_hash' => hash('sha256', 'synthetic-pair'), 'public_token_encrypted' => Crypt::encryptString('synthetic-pair'), 'status' => 'active']);
+        foreach ([1, 2] as $n) {
+            Storage::disk('s3_private')->put('manual/pair'.$n.'.png', $this->png($n));
+            OrderPreview::create(['order_id' => $first->order_id, 'product_gallery_id' => $gallery->id, 'disk' => 's3_private', 'file_path' => 'manual/pair'.$n.'.png',
+                'original_name' => 'manual.png', 'mime_type' => 'image/png', 'file_size' => strlen($this->png($n))]);
+        }
+        $service = app(ManualProductArtwork::class);
+        $offers = $service->offers($first->order);
+        $url = route('admin.orders.workspace.manual-artwork-adopt', $first->order);
+        $valid = [$first->id => $offers[0]['choices'][0]['token'], $second->id => $offers[1]['choices'][1]['token']];
+        $this->post($url, ['confirm' => 1, 'choices' => [$first->id => $valid[$first->id], $second->id => 'invalid']])->assertStatus(409);
+        $this->assertSame(2, PuzzleGeneration::where('status', 'uncertain')->count());
+        $this->assertSame(2, OrderPreview::whereNull('production_unit_key')->count());
+        $this->post($url, ['confirm' => 1, 'choices' => [$first->id => $valid[$first->id], $second->id => $offers[1]['choices'][0]['token']]])->assertStatus(409);
+        $this->assertSame(2, PuzzleGeneration::where('status', 'uncertain')->count());
+        $this->post($url, ['confirm' => 1, 'choices' => $valid])->assertSessionHasNoErrors();
+        $this->assertSame(2, PuzzleGeneration::where('status', 'manual_artwork')->count());
+        $this->assertSame(2, OrderPreview::where('order_id', $first->order_id)->count());
+        $next = OrderProcessRun::latest('id')->first();
+        app(ProcessRuntime::class)->advance($next->id);
+        $this->travel(181)->seconds();
+        app(ProcessRuntime::class)->advance($next->id);
+        $manifest = OrderReviewManifest::sole();
+        $this->assertSame(2, count($manifest->images));
+        $this->assertTrue(app(CustomerPreviewPage::class)->available($manifest));
+        $this->assertSame(2, count(app(StaffPreviewInputs::class)->capture($manifest)));
+        Http::assertNothingSent();
     }
 
     private function send(OrderProcessRun $run): void

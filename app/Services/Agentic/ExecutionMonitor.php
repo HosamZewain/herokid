@@ -73,7 +73,7 @@ class ExecutionMonitor
             in_array($status, ['queued', 'pending', 'waiting_slot', 'waiting_identity', 'waiting_response', 'waiting_staff', 'retry_queued', 'retry_authorized'], true) => 'waiting',
             in_array($status, ['processing', 'preparing', 'running', 'sending', 'stopping'], true) => 'running',
             $status === 'failed' => 'failed',
-            in_array($status, ['blocked', 'review', 'needs_manual', 'quality_review', 'held', 'paused'], true) => 'review',
+            in_array($status, ['blocked', 'review', 'manual_artwork', 'needs_manual', 'quality_review', 'held', 'paused'], true) => 'review',
             in_array($status, ['cancelled', 'stopped'], true) => 'stopped',
             $type === 'confirmation' && $status === 'succeeded' => 'message_accepted',
             $type === 'process_message' && $status === 'completed' => 'workflow_completed',

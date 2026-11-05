@@ -25,6 +25,7 @@ use App\Services\Orders\AutomationHandoff;
 use App\Services\Orders\BookPromptSync;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Orders\StaffPreviewInputs;
+use App\Services\ProductAutomation\ImageRecoveryPolicy;
 use App\Services\RoboDesk\OrderConfirmationService;
 use App\Support\OrderStatusRegistry;
 use Illuminate\Support\Facades\DB;
@@ -135,14 +136,14 @@ class OrderContextBuilder
                         : PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first();
                     $approvedImage = $manifest ? collect($manifest->images)->first(fn ($image) => ($image['item_id'] ?? null) === $item->id && ($image['kind'] ?? null) === 'book_cover') : null;
                     $generation = $bookPages ? PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->first() : $run;
-                    $preview = $generation?->preview_id ? OrderPreview::with('productGallery')->find($generation->preview_id) : null;
-                    $coverApproved = $manifest?->approved_at && $approvedImage && $generation?->status === 'succeeded'
+                    $preview = $generation?->artworkPreviewId() ? OrderPreview::with('productGallery')->find($generation->artworkPreviewId()) : null;
+                    $coverApproved = $manifest?->approved_at && $approvedImage && $generation?->hasArtwork()
                         && in_array($manifest->run?->status, ['running', 'waiting_staff', 'completed'], true)
                         && ($approvedImage['generation_id'] ?? null) === $generation->id
-                        && ($approvedImage['sha256'] ?? null) === $generation->checksum
+                        && ($approvedImage['sha256'] ?? null) === $generation->artworkChecksum()
                         && $preview && $preview->productGallery?->status === 'active'
                         && ($approvedImage['preview_id'] ?? null) === $preview->id
-                        && ($approvedImage['path'] ?? null) === $preview->file_path && $preview->checksum === $generation->checksum
+                        && ($approvedImage['path'] ?? null) === $preview->file_path && $preview->checksum === $generation->artworkChecksum()
                         // Reuse the SELECT-only approved template lineage. Media,
                         // provider and byte-level capture remain executor preflight.
                         && (app(BookPromptSync::class)->matchesInterior($item, $approvedImage['interior_fingerprint'] ?? '')
@@ -189,14 +190,16 @@ class OrderContextBuilder
 
     private function production(CodexSceneRun|PuzzleGeneration|null $run, int $expected): array
     {
-        $numbers = $run instanceof CodexSceneRun ? array_map('intval', array_keys($run->scenes ?? [])) : ($run?->status === 'succeeded' ? [1] : []);
+        $numbers = $run instanceof CodexSceneRun ? array_map('intval', array_keys($run->scenes ?? [])) : ($run?->hasArtwork() ? [1] : []);
         sort($numbers);
         $recovering = $run instanceof CodexSceneRun && in_array($run->book_pdf['recovery']['status'] ?? '', ['queued', 'working'], true);
 
-        return ['run_ref' => $run ? ($run instanceof CodexSceneRun ? 'scenes:' : 'image:').$run->id : null, 'status' => $recovering ? 'running' : $run?->status,
+        return ['run_ref' => $run ? ($run instanceof CodexSceneRun ? 'scenes:' : 'image:').$run->id : null, 'status' => $recovering ? 'running' : ($run?->status === 'manual_artwork' ? 'succeeded' : $run?->status),
             'active' => $recovering || in_array($run?->status, ['queued', 'processing', 'running', 'preparing', 'waiting_slot', 'stopping'], true),
             'uncertain' => $run?->status === 'uncertain', 'attempted' => $run !== null,
-            'completed_numbers' => $numbers, 'missing_numbers' => array_values(array_diff(range(1, max(1, min(1000, $expected))), $numbers))];
+            'completed_numbers' => $numbers, 'missing_numbers' => array_values(array_diff(range(1, max(1, min(1000, $expected))), $numbers))]
+            + ($run instanceof PuzzleGeneration && in_array($run->status, ['blocked', 'uncertain', 'review'], true)
+                ? ['recovery' => app(ImageRecoveryPolicy::class)->forRun($run)] : []);
     }
 
     private function outputs(Order $order, string $key, array &$context): int

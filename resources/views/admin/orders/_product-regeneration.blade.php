@@ -9,9 +9,9 @@
         <p>آخر محاولة لهذا المنتج: {{ $latestProductGeneration->attempt_number }} — {{ \App\Models\PuzzleGeneration::LABELS[$latestProductGeneration->status] ?? $latestProductGeneration->status }}</p>
         @if($latestProductGeneration->photoWarning())<p class="mt-2 font-bold">{{ $latestProductGeneration->photoWarning() }}</p>@endif
         @if($latestProductGeneration->error_code)
-            <p class="mt-2">{{ \App\Models\PuzzleGeneration::ERRORS[$latestProductGeneration->error_code] ?? 'تعذر إكمال المحاولة؛ راجع بيانات المنتج وحالة التنفيذ.' }}</p>
+            <p class="mt-2">{{ $latestProductGeneration->failureDescription(\App\Services\Orders\AutomationControl::blocked($latestProductGeneration->checkout_key) || \App\Services\Orders\AutomationHandoff::held($latestProductGeneration->checkout_key)) }}</p>
         @endif
-        @if((in_array($latestProductGeneration->status, ['succeeded', 'review', 'blocked'], true) || $latestProductGeneration->canAuthorizeUncertainRetry()) && app(\App\Services\ProductAutomation\PuzzleAutomation::class)->enabled())
+        @if((in_array($latestProductGeneration->status, ['succeeded', 'review', 'blocked', 'manual_artwork'], true) || $latestProductGeneration->canAuthorizeUncertainRetry()) && app(\App\Services\ProductAutomation\PuzzleAutomation::class)->enabled())
             <form method="POST" action="{{ route('admin.orders.products.regenerate', [$productPrompt['item']->order_id, $productPrompt['item']->id]) }}" class="mt-2">
                 @csrf
                 <input type="hidden" name="previous_run_id" value="{{ $latestProductGeneration->id }}">

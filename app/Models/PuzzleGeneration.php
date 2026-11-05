@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\Orders\AutomationActivity;
+use App\Services\ProductAutomation\ImageRecoveryPolicy;
 use Illuminate\Database\Eloquent\Model;
 
 class PuzzleGeneration extends Model
@@ -12,11 +13,14 @@ class PuzzleGeneration extends Model
     protected $casts = ['attempt_number' => 'integer', 'requested_by' => 'integer', 'previous_run_id' => 'integer', 'context' => 'encrypted:array', 'usage' => 'array', 'started_at' => 'datetime', 'finished_at' => 'datetime', 'lease_until' => 'datetime'];
 
     public const LABELS = ['queued' => 'بانتظار توليد صورة المنتج', 'processing' => 'جاري توليد صورة المنتج',
-        'succeeded' => 'الصورة محفوظة في المرفقات والمعاينة', 'blocked' => 'يحتاج تدخل الفريق — لم يبدأ الإرسال',
+        'manual_artwork' => 'استخدام معاينة رفعها الفريق — المحاولة السابقة محفوظة',
+        'succeeded' => 'الصورة محفوظة في المرفقات والمعاينة', 'blocked' => 'التوليد متعثر — راجع السبب والإجراء التالي',
         'retry_authorized' => 'نتيجة سابقة غير مؤكدة — أذن الفريق بمحاولة جديدة',
         'uncertain' => 'نتيجة التوليد غير مؤكدة — تحتاج قرار الفريق', 'review' => 'الصورة محفوظة للمراجعة — لم تُنشر في المعاينة'];
 
     public const ERRORS = [
+        'puzzle_recovery_inputs_changed' => 'تغيّرت صور أو بيانات المنتج منذ المحاولة السابقة؛ راجع النسخة الحالية قبل بدء محاولة جديدة.',
+        'puzzle_recovery_output_requires_review' => 'توجد نتيجة محفوظة أو تعذر التحقق من التخزين؛ راجع الملف قبل إعادة التوليد.',
         'puzzle_no_usable_photos' => 'لا توجد صورة صالحة للتوليد. ارفع صورة واضحة للطفل بصيغة JPG أو PNG أو WebP، أقل من 15 ميجابايت و25 مليون بكسل، ثم أعد الفحص.',
         'puzzle_photos_required' => 'صور الطفل ناقصة أو تتجاوز 10 صور. عدّل صور هذا الطفل ثم أعد الفحص.',
         'puzzle_invalid_photo' => 'أحد مراجع صور الطفل غير صالح. أعد رفع الصورة من تعديل الطلب ثم أعد الفحص.',
@@ -52,6 +56,51 @@ class PuzzleGeneration extends Model
         $numbers = implode('، ', array_map(fn ($photo) => (int) $photo['number'], $excluded));
 
         return 'يستخدم التوليد '.count($this->context['photos'] ?? []).' صورة صالحة لنفس الطفل. استُبعدت الصور رقم '.$numbers.' لأنها غير مدعومة أو تتجاوز حدود الصورة؛ الملفات الأصلية محفوظة.';
+    }
+
+    public function artworkContext(): array
+    {
+        return $this->status === 'manual_artwork' ? ($this->context['manual_artwork']['inputs'] ?? []) : ($this->context ?? []);
+    }
+
+    public function artworkPreviewId(): ?int
+    {
+        return $this->status === 'manual_artwork' ? ($this->context['manual_artwork']['preview_id'] ?? null) : $this->preview_id;
+    }
+
+    public function artworkChecksum(): ?string
+    {
+        return $this->status === 'manual_artwork' ? ($this->context['manual_artwork']['sha256'] ?? null) : $this->checksum;
+    }
+
+    public function hasArtwork(): bool
+    {
+        return in_array($this->status, ['succeeded', 'manual_artwork'], true);
+    }
+
+    public function failureDescription(bool $paused = false): ?string
+    {
+        if ($this->status === 'manual_artwork') {
+            return 'اختار الفريق معاينة مرفوعة لهذا المنتج؛ تُستخدم بدل المحاولة السابقة، دون اعتبارها صورة ولّدها المزود. موافقة العميل تُسجل بشكل مستقل.';
+        }
+        if (! $this->error_code) {
+            return null;
+        }
+        $recovery = app(ImageRecoveryPolicy::class)->forRun($this);
+        if (in_array($recovery['reason_code'], ['IMAGE_RECOVERY_READY', 'IMAGE_RECOVERY_BACKOFF'], true)) {
+            if ($paused) {
+                return 'هذه المحاولة قابلة للتعافي الآلي، لكن الطلب متوقف يدويًا. بعد مراجعة البيانات استخدم استئناف الأوتوميشن.';
+            }
+
+            return 'الأوتو بايلوت يعالج العطل تلقائيًا بمحاولات محدودة بعد الانتظار؛ لا تكرر التوليد يدويًا. سيُعاد فحص الطلب قبل التشغيل.';
+        }
+
+        return match ($recovery['reason_code']) {
+            'IMAGE_CONTENT_REVIEW_REQUIRED' => 'مزود الصور رفض المحتوى. راجع وصف التصميم وصور الطفل؛ لن تُعاد المحاولة تلقائيًا أو يُغيّر وصف العميل لتجاوز الرفض.',
+            'IMAGE_PROVIDER_CONFIGURATION_REQUIRED' => 'المطلوب من المدير: مراجعة رصيد مزود الصور أو صلاحيات الموديل أو بيانات الاتصال حسب سبب المحاولة.',
+            'IMAGE_RECOVERY_LIMIT_REACHED' => 'استُنفدت محاولات التعافي التلقائي لهذا المنتج. راجع سبب رفض المزود قبل محاولة جديدة.',
+            default => self::ERRORS[$this->error_code] ?? 'تعذر إكمال التوليد؛ راجع بيانات المنتج والمحاولة الحالية.',
+        };
     }
 
     /** Worker completion is distinct from provider/billing certainty. */

@@ -104,6 +104,10 @@
     <div class="py-8">
         <div class="mx-auto w-full max-w-none space-y-6 px-4 sm:px-6 lg:px-8">
             @include('admin.orders._codex-generation-banner', ['generationBannerOrder' => $attachmentTarget])
+            @if(auth()->user()?->hasPermission('orders.automation.control') && auth()->user()?->hasPermission('orders.production_prompt.manage'))
+                <a href="{{ route('admin.orders.workspace.manual-artwork', $attachmentTarget) }}" class="my-3 block font-bold text-indigo-700 underline">رفعت المعاينات يدويًا بعد تعثر التوليد؟ ربط الصور بالمنتجات واستكمال المعاينة</a>
+            @endif
+
             @include('admin.orders._shipping-merge-reviews')
             @if(session('success'))
                 <div class="rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm font-bold text-green-800">{{ session('success') }}</div>

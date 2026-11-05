@@ -139,7 +139,10 @@ class AutomationHandoff
             $unstartedPreview = $runs->contains(fn ($run) => (json_decode($hold->runs, true)[$run->id] ?? null) === 'blocked' && ProductPreviewRecovery::untouched($run));
             $revisedPreview = ($changed || $revisedArtwork || $unstartedPreview) && $confirmedProducts && $runs->isNotEmpty();
             if (PuzzleGeneration::where('checkout_key', $key)->whereIn('status', ['processing', 'uncertain'])->lockForUpdate()->exists()) {
-                throw ValidationException::withMessages(['assignment' => 'هناك توليد منتج جارٍ أو نتيجته غير مؤكدة؛ انتظر مراجعته قبل الإرجاع.']);
+                $busy = PuzzleGeneration::where('checkout_key', $key)->where(fn ($q) => $q->where('status', 'processing')->orWhereNotNull('lease_until'))->exists();
+                throw ValidationException::withMessages(['assignment' => $busy
+                    ? 'هناك توليد منتج جارٍ؛ انتظر انتهاء المحاولة قبل الاستئناف.'
+                    : 'التوليد انتهى دون نتيجة مؤكدة. إذا رفعت المعاينات يدويًا، استخدم «ربط الصور بالمنتجات واستكمال المعاينة» أعلى الطلب بدل إعادة التوليد أو انتظار طابور فارغ.']);
             }
             $approvedBooks = collect();
             $manifest = OrderReviewManifest::where('checkout_key', $key)->latest('id')->first();

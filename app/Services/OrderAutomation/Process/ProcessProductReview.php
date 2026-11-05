@@ -13,6 +13,7 @@ use App\Models\OrderReviewManifest;
 use App\Models\PuzzleGeneration;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\BookPromptSync;
+use App\Services\Orders\ManualProductArtwork;
 use App\Services\Orders\PreviewProductReuse;
 use App\Services\Orders\StaffPreviewInputs;
 use App\Services\ProductAutomation\PuzzleAutomation;
@@ -50,6 +51,11 @@ class ProcessProductReview
             $context = $captured[$item->id];
             $existing = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->lockForUpdate()->first();
             if ($existing) {
+                if ($existing->status === 'manual_artwork') {
+                    app(ManualProductArtwork::class)->image($item, $existing, $context);
+
+                    continue;
+                }
                 if (! hash_equals($context['fingerprint'], $existing->context['fingerprint'] ?? '') && ! PreviewProductReuse::matches($run, $item, $existing, $context)) {
                     throw new ProductPreviewInputException($item->id, 'preview_product_changed');
                 }
@@ -96,6 +102,11 @@ class ProcessProductReview
                 }
 
                 return false;
+            }
+            if ($generation->status === 'manual_artwork') {
+                $images[] = app(ManualProductArtwork::class)->image($item, $generation, $this->capture($item));
+
+                continue;
             }
             if ($generation->status !== 'succeeded') {
                 throw new ProductPreviewInputException($item->id, 'preview_product_result_review');

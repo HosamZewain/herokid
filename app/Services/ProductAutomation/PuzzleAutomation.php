@@ -15,6 +15,7 @@ use App\Models\PuzzleGeneration;
 use App\Models\User;
 use App\Services\Ai\AiImagePricingService;
 use App\Services\Ai\GptImageClient;
+use App\Services\OrderAutomation\Process\ProcessImageRecovery;
 use App\Services\OrderAutomation\WorkflowInputs;
 use App\Services\Orders\AutomationActivity;
 use App\Services\Orders\AutomationAssignment;
@@ -102,9 +103,11 @@ class PuzzleAutomation
             $item = OrderItem::where('order_id', $item->order_id)->lockForUpdate()->findOrFail($item->id);
             $order = $rows->firstWhere('id', $item->order_id);
             $admissionGuard();
+            $previous = PuzzleGeneration::where('order_item_id', $item->id)->latest('id')->lockForUpdate()->first();
+            $recovery = $previous ? app(ImageRecoveryPolicy::class)->forRun($previous) : null;
             if (! $this->enabled() || ! $order || ! AutomationControl::admits($key) || AutomationHandoff::held($key)
                 || app(AutomationAssignment::class)->owns($order)
-                || PuzzleGeneration::where('order_item_id', $item->id)->exists()
+                || ($previous && ! $recovery['eligible'])
                 || ! in_array($order->status, ['new_confirmed', 'costomer_confirmed'], true)
                 || ! in_array($order->printing_status, [null, 'not_started', 'not_required'], true)
                 || ! in_array($order->shipping_status, [null, 'not_ready', 'not_required'], true)) {
@@ -114,14 +117,29 @@ class PuzzleAutomation
             if ($context['unit_key'] !== $unitKey) {
                 throw new RuntimeException('autopilot_unit_mismatch');
             }
+            if ($previous) {
+                if (! hash_equals($context['fingerprint'], $previous->context['fingerprint'] ?? '')
+                    || PuzzleGeneration::where('previous_run_id', $previous->id)->exists()) {
+                    throw new RuntimeException('puzzle_recovery_inputs_changed');
+                }
+                try {
+                    $this->assertNoUnrecordedOutput($previous);
+                } catch (Throwable) {
+                    throw new RuntimeException('puzzle_recovery_output_requires_review');
+                }
+                $context['automatic_recovery'] = ['attempt' => $recovery['attempt'] + 1, 'previous_run_id' => $previous->id,
+                    'category' => $recovery['category'], 'compatible_references' => $recovery['category'] === 'reference_format'];
+                $context['output_baseline'] = $this->outputBaseline($order->id, $unitKey);
+            }
             $candidate = new PuzzleGeneration(['order_id' => $order->id, 'unit_key' => $unitKey]);
             $this->assertNoOutput($candidate);
             $admissionGuard(); // Capture/media reads must not conceal a concurrent brief edit.
-            $event = OrderProcessEvent::create(['event_key' => 'autopilot-first:'.$item->id, 'checkout_key' => $key, 'order_id' => $order->id,
+            $event = OrderProcessEvent::create(['event_key' => $previous ? 'autopilot-recovery:'.$previous->id : 'autopilot-first:'.$item->id, 'checkout_key' => $key, 'order_id' => $order->id,
                 'type' => 'autopilot_production_admitted', 'status' => 'processed', 'data' => ['unit_key' => $unitKey]]);
 
             return PuzzleGeneration::create(['order_id' => $order->id, 'order_item_id' => $item->id,
-                'event_id' => $event->id, 'checkout_key' => $key, 'unit_key' => $unitKey, 'context' => $context, 'status' => 'queued']);
+                'event_id' => $event->id, 'checkout_key' => $key, 'unit_key' => $unitKey, 'context' => $context, 'status' => 'queued',
+                'previous_run_id' => $previous?->id, 'attempt_number' => $previous ? $previous->attempt_number + 1 : 1]);
         });
     }
 
@@ -154,7 +172,7 @@ class PuzzleAutomation
             }
             $recovering = $authorizeUncertainRetry && $previous->canAuthorizeUncertainRetry();
             if (! $this->enabled() || $runs->last()->id !== $previousId
-                || (! $recovering && ! in_array($previous->status, ['succeeded', 'review', 'blocked'], true))
+                || (! $recovering && ! in_array($previous->status, ['succeeded', 'review', 'blocked', 'manual_artwork'], true))
                 || $runs->contains(fn ($r) => in_array($r->status, ['queued', 'processing', 'uncertain'], true) && ! ($recovering && $r->id === $previous->id))
                 || app(AutomationAssignment::class)->owns($order)) {
                 throw ValidationException::withMessages(['product_generation' => 'انتظر انتهاء التنفيذ الحالي أو راجع المحاولة غير المؤكدة، ثم استلم الطلب يدويًا إذا كان تحت مسؤولية الأوتوميشن.']);
@@ -239,7 +257,7 @@ class PuzzleAutomation
             try {
                 $fresh = app(PuzzleInputs::class)->capture(OrderItem::findOrFail($run->order_item_id), $run->context['prompt_override'] ?? null);
                 if (! $unstarted) {
-                    if (! $run->context || ! hash_equals($run->context['fingerprint'], $fresh['fingerprint'])) {
+                    if (! $run->context || ! hash_equals($run->artworkContext()['fingerprint'] ?? '', $fresh['fingerprint'])) {
                         throw new RuntimeException('puzzle_completed_inputs_changed');
                     }
 
@@ -319,7 +337,8 @@ class PuzzleAutomation
             $images = app(WorkflowInputs::class)->images($context);
             $submitted = true;
             $result = app(GptImageClient::class)->generate(new GptImageRequest($provider, $model, $context['prompt'], $images,
-                $context['size'], $context['quality'], 'puzzle-'.$run->id, maxAttempts: 1));
+                $context['size'], $context['quality'], 'puzzle-'.$run->id, maxAttempts: 1,
+                compatibleReferences: (bool) ($context['automatic_recovery']['compatible_references'] ?? false)));
             $cost = app(AiImagePricingService::class)->calculate($model, $context['size'], $context['quality'], $result->usage);
             $run->update(['provider_request_id' => $result->providerRequestId, 'usage' => $result->usage,
                 'cost_usd' => $cost['cost_usd'], 'billing_status' => $cost['billing_status']]);
@@ -402,10 +421,11 @@ class PuzzleAutomation
                     'finished_at' => now(), 'lease_until' => null, 'error_code' => null]);
                 // Do not change a mixed checkout's story/payment state or send WhatsApp.
             });
+            app(ProcessImageRecovery::class)->resume($run->fresh());
         } catch (Throwable $error) {
             $run->refresh();
             $failure = $this->failureDetails($error, $run->id, $submitted);
-            $run->update(['status' => $run->output_path ? 'review' : ($submitted ? 'uncertain' : 'blocked'),
+            $run->update(['status' => $run->output_path ? 'review' : (($failure['definitively_rejected'] ?? false) ? 'blocked' : ($submitted ? 'uncertain' : 'blocked')),
                 'error_code' => $failure['code'],
                 'context' => array_merge($run->context ?? [], ['failure' => $failure]),
                 'provider_request_id' => $run->provider_request_id ?: $failure['provider_request_id'],
@@ -462,7 +482,7 @@ class PuzzleAutomation
         $requestId = null;
         $status = null;
         if ($error instanceof GptImageException) {
-            $status = $error->getPrevious() instanceof RequestException ? $error->getPrevious()->response?->status() : null;
+            $status = $error->diagnostics['http_status'] ?? ($error->getPrevious() instanceof RequestException ? $error->getPrevious()->response?->status() : null);
             $code = match (true) {
                 $error->errorCode === 'provider_connection_failed' => 'puzzle_provider_connection',
                 in_array($error->errorCode, ['insufficient_quota', 'billing_hard_limit_reached'], true) => 'puzzle_provider_billing',
@@ -480,7 +500,7 @@ class PuzzleAutomation
 
         // No provider message/body, prompt, URL, customer photo or credential.
         return ['code' => $code, 'http_status' => $status, 'provider_request_id' => $requestId,
-            'client_request_id' => 'puzzle-'.$runId, 'at' => now()->toIso8601String()];
+            'client_request_id' => 'puzzle-'.$runId, 'at' => now()->toIso8601String()] + ($error instanceof GptImageException ? $error->diagnostics : []);
     }
 
     private function safeError(Throwable $error, string $fallback): string

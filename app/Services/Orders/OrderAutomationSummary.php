@@ -54,7 +54,7 @@ class OrderAutomationSummary
         $confirmations = DB::table('robodesk_integration_events')->whereIn('checkout_group_key', $keys)->where('event_type', 'order.pending_confirmation')->orderBy('id')->get(['id', 'checkout_group_key', 'status', 'updated_at'])->groupBy('checkout_group_key');
         $identities = DB::table('order_process_identities')->whereIn('run_id', $processes->flatten(1)->pluck('id'))->get(['id', 'run_id', 'order_id', 'status', 'error_code', 'updated_at'])->groupBy('run_id');
         $manualIdentities = DB::table('order_identity_regenerations')->whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'status', 'error_code', 'updated_at'])->groupBy('checkout_key');
-        $products = PuzzleGeneration::whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'unit_key', 'status', 'error_code', 'context', 'requested_by', 'checksum', 'updated_at', 'started_at', 'finished_at', 'lease_until', 'provider_request_id', 'output_path', 'attachment_id', 'preview_id'])->groupBy('checkout_key');
+        $products = PuzzleGeneration::whereIn('checkout_key', $keys)->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'unit_key', 'status', 'error_code', 'context', 'requested_by', 'checksum', 'updated_at', 'started_at', 'finished_at', 'lease_until', 'provider_request_id', 'output_path', 'attachment_id', 'preview_id', 'attempt_number'])->groupBy('checkout_key');
         $scenes = CodexSceneRun::whereIn('checkout_key', $keys)->orderBy('created_at')->orderBy('id')->get(['id', 'checkout_key', 'order_id', 'order_item_id', 'production_kind', 'status', 'book_pdf', 'scenes', 'scene_count', 'error_code', 'updated_at'])->groupBy('checkout_key');
         $books = DB::table('order_items')->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('order_item_production_components as component', 'component.order_item_id', '=', 'order_items.id')
@@ -155,9 +155,9 @@ class OrderAutomationSummary
             foreach ($products->get($key, collect())->keyBy('order_item_id') as $product) {
                 $stage = ($product->context['production_stage'] ?? '') === 'book_cover' ? 'book_cover' : 'product';
                 $state = match ($product->status) {
-                    'processing' => 'running','queued' => 'queued','succeeded' => 'idle',default => 'intervention'
+                    'processing' => 'running','queued' => 'queued','succeeded','manual_artwork' => 'idle',default => 'intervention'
                 };
-                $add($stage, $state, self::STAGES[$stage].' #'.$product->order_item_id.' — '.(PuzzleGeneration::LABELS[$product->status] ?? $product->status), $product->updated_at, $product->photoWarning() && in_array($product->status, ['queued', 'processing', 'succeeded'], true) ? $product->photoWarning() : ($product->status === 'uncertain' && $product->canAuthorizeUncertainRetry() ? 'أوقف الأوتوميشن بأمان، ثم استخدم إعادة التوليد من بند المنتج مع الموافقة على محاولة جديدة.' : $product->error_code), $product->order_id, $product->status === 'succeeded' ? 1 : 0, 1);
+                $add($stage, $state, self::STAGES[$stage].' #'.$product->order_item_id.' — '.(PuzzleGeneration::LABELS[$product->status] ?? $product->status), $product->updated_at, $product->photoWarning() && in_array($product->status, ['queued', 'processing', 'succeeded'], true) ? $product->photoWarning() : $product->failureDescription(($control && $control->state !== 'running') || $holds->contains($key)), $product->order_id, $product->hasArtwork() ? 1 : 0, 1);
             }
             foreach ($scenes->get($key, collect())->keyBy(fn ($run) => $run->order_id.':'.($run->order_item_id ?? 'story')) as $run) {
                 $done = collect($run->scenes ?? [])->filter(fn ($s, $number) => ctype_digit((string) $number) && (int) $number >= 1 && (int) $number <= ($run->scene_count ?? 13) && ! empty($s['path']) && ! empty($s['sha256']))->count();
@@ -204,8 +204,8 @@ class OrderAutomationSummary
                 }
                 $manifest = $manifests->get($key);
                 $approved = $manifest?->approved_at && collect($manifest->images)->contains(fn ($image) => ($image['kind'] ?? '') === 'book_cover' && ($image['item_id'] ?? null) === $book->id && ($image['generation_id'] ?? null) === $cover?->id);
-                [$state,$reason] = ! $cover || $cover->status !== 'succeeded'
-                    ? [$hasExecution ? 'queued' : 'intervention', $hasExecution ? 'بانتظار تجهيز كفر الكتاب — الكفر بـOpenAI API، والداخل بـCodex.' : 'الكفر لم يدخل التوليد. استخدم فحص وإدخال للأوتوميشن للتحقق من بيانات الكتاب.']
+                [$state,$reason] = ! $cover || ! $cover->hasArtwork()
+                    ? [! $cover && $hasExecution || ($cover && in_array($cover->status, ['queued', 'processing'], true)) ? 'waiting' : 'intervention', $cover && in_array($cover->status, ['queued', 'processing'], true) ? 'الصفحات لم تدخل الطابور؛ ننتظر تجهيز الكفر بـOpenAI API أولًا.' : 'الصفحات لم تدخل الطابور؛ راجع تعثر الكفر أو استخدم فحص وإدخال للأوتوميشن إن لم يبدأ الكفر.']
                     : (! $approved ? ['waiting', 'بانتظار اعتماد الكفر الحالي.']
                     : ($rows->sum('paid_amount_cents') <= 0 ? ['waiting', 'بانتظار تسجيل دفعة فعلية.']
                     : ['intervention', 'الكفر معتمد والدفعة مسجلة، لكن صفحات Codex لم تبدأ. استخدم فحص وبدء صفحات التلوين؛ سيُراجع شروط التشغيل.']));

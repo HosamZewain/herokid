@@ -1,5 +1,9 @@
 # HeroKid AWS deployment and agent handoff
 
+## 5 November 2026 — bounded image recovery and manual artwork adoption PREPARED
+
+Prepared from verified Main/AWS5420bc2b94afb07b568f6610d11eb8f9e24090e2 under the owner's request for Auto Pilot recovery and HK11-155 manual-upload continuation. [Behavior, audit and guardrails](autopilot-image-recovery-2026-11-05.ar.md). New structured provider failure classes permit fresh AI decisions for bounded429/backoff and one reference-format normalization retry; content/billing/unknown outcomes remain fenced. Protected explicit staff artwork selection retains failed-provider/billing history as manual_artwork, starts an unsent preview version, and preserves customer approval/payment. No fabricated AI success. Two native routes, no schema/config/dependency/assets change. SQLite/MySQL each252tests/3010assertions; dedicated MySQL races2/9. Two preexisting container-PDF failures excluded with baseline proof. Live read-only candidate HK11-155 has two scoped uploads for two products; no business mutation. Not yet deployed; keep manual_artwork-compatible readers after any new selection.
+
 ## 5 November 2026 — light Auto Pilot Mission Control DEPLOYED
 
 Owner explicitly authorized publication. Application **59f88a6a027128c1d569922df27523a29d0b10b8**, based on verified Main/AWS **63f1e908a1f1343bffed46e6fdde69d9f2436c0a**, deployed **13:29:22UTC /15:29Cairo**. The selected light dashboard is live with read-only operational aggregates, current activity, completed native steps, waiting/intervention reasons, coverage and receipt drilldowns. Sidebar link is immediately below Dashboard with existing permissions. AI allowance remains **5000/day**, execution enabled/unlimited and current native ownership/safety gates unchanged. This supersedes the prepared-only UI status below.
