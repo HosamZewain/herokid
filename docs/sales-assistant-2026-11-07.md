@@ -1,6 +1,6 @@
-# Storefront sales assistant — prepared, not deployed
+# Storefront sales assistant — deployed, customer feature disabled
 
-Implementation worktree `/tmp/herokid-sales-assistant-20261106`, branch `codex/sales-assistant-20261106`, based on revalidated AWS/Main `e388684829c3e3bfe75d7cb1ce7e411321a659c7`. The primary checkout's unrelated changes were preserved. This document describes prepared application code, not a live release. The new feature defaults to disabled; no production worker, migration, feature switch or customer order was changed.
+Implementation worktree `/tmp/herokid-sales-assistant-20261106`, branch `codex/sales-assistant-20261106`, based on revalidated AWS/Main `e388684829c3e3bfe75d7cb1ce7e411321a659c7`. Application **7b844a62359a7113da00d96caeb3ce5ded30e490** was explicitly approved and deployed at **6 November22:53:07–22:53:17UTC /7 November00:53:07–00:53:17Cairo**. The primary checkout's unrelated changes were preserved. The public feature remains **OFF** (setting absent/defaultfalse), with no experience approval/model receipt saved. Six additive tables and exactly one dedicated worker were installed; no customer order, payment, production approval or media was changed by this release.
 
 ## Customer experience
 
@@ -35,7 +35,7 @@ Default daily cap USD 5, one pending/processing turn per conversation, 5 message
 
 The Responses request itself is a single HTTP attempt with a 55-second timeout, run on the dedicated database connection/queue `storefront-assistant`. POST returns 202 without waiting for OpenAI. One worker has timeout 75, retry-after 120, tries 1 and a 192MB recycle threshold; the prepared systemd unit has a 256MB ceiling and graceful 90-second stop. A duplicate queue delivery cannot make a second model call. Maintenance expires stale unstarted turns and marks stale started turns uncertain without retry. A stale queued observation cannot release a reservation once a worker has started. Polling is bounded and stops while the chat/page is hidden. Worker health is reported and a stale heartbeat stops new chat requests while forms remain usable. Disabling the feature prevents new model turns and MCP access; the normal store/cart/checkout remain usable.
 
-No new paid AWS services, instances, queues or static credentials are required. The extra worker is a process on the existing EC2 instance. Do not install/start the prepared unit without release authorization.
+No new paid AWS services, instances, queues or static credentials are required. The extra worker is a process on the existing EC2 instance. Its single systemd unit was installed and started under the owner's explicit release approval; no other worker was signalled for this release.
 
 ## Verification and remaining acceptance
 
@@ -43,7 +43,7 @@ See the final validation record accompanying the commit for counts. Testing uses
 
 The deterministic Egyptian-Arabic retrieval fixture covers prayer, football, parents, coloring and screen-free activities with a top-three recall gate of at least 90%. This tests retrieval, not GPT-6 Luna's real recommendation quality. Model replies in local tests/browser QA are synthetic. The live account model-list lookup returned HTTP 200 and exact `gpt-6-luna`, with no generation request and no stored credential receipt or production setting update. Real Responses/MCP behavior, the 90% model-ranking acceptance target and real conversion uplift remain unverified. No synthetic paid AI/customer-facing production test is permitted by AGENTS.md.
 
-## Authorized release procedure (prepared only)
+## Controlled release procedure and activation gate
 
 1. Re-read `docs/aws-deployment-runbook.md`, inspect live SHA/clean state, rebase/review any drift. Select exact application SHA and explicit deployment approval; preserve primary local changes and the current `orders_visibility=assigned` setting.
 2. Checkpoint current SHA, changed files, manifest/old asset hashes, native config/permissions and a verified database backup using the runbook. Preserve APP_KEY, encrypted credentials and production `.env`/cached config. Never print these.
@@ -56,7 +56,7 @@ The deterministic Egyptian-Arabic retrieval fixture covers prayer, football, par
 
 ## Containment and recovery
 
-Use the protected native switch to disable the assistant first. Gracefully stop only its worker (wait for in-flight request or classify its turn uncertain). Preserve reservations when provider outcome is unknown. Keep all completed orders, ledger, photos, receipts and attribution. Native browsing/checkout continues. Prefer forward repair; code-only rollback requires drift review and compatible old assets/config. Do not migrate down, restore a database, clear queues/Redis, retry failed historical jobs or remove customer media. The release-specific production recovery checkpoint does not exist until an authorized deployment creates and verifies it.
+Use the protected native switch to disable the assistant first. Gracefully stop only its worker (wait for in-flight request or classify its turn uncertain). Preserve reservations when provider outcome is unknown. Keep all completed orders, ledger, photos, receipts and attribution. Native browsing/checkout continues. Prefer forward repair; code-only rollback requires drift review and compatible old assets/config/routes. Do not migrate down, restore a database, clear queues/Redis, retry failed historical jobs or remove customer media. Verified checkpoint: `/home/ubuntu/herokid-before-sales-assistant-20261107`; evidence: `/home/ubuntu/herokid-sales-assistant-release-20261107`. The private production backup `herokid-20261106T225223Z.sql.gz` was gzip/checksum verified locally and SHA metadata/size verified on the existing S3 backup prefix before migration; no fresh restore test was performed.
 
 
 Official reference consulted: [GPT-6 Luna model](https://developers.openai.com/api/docs/models/gpt-6-luna), [remote MCP tools](https://developers.openai.com/api/docs/guides/tools-connectors-mcp). Model-list availability is not proof that a real queued response and all remote-tool behaviors have passed acceptance.
@@ -69,3 +69,12 @@ Official reference consulted: [GPT-6 Luna model](https://developers.openai.com/a
 - Lockfile build passed: **19 manifest entries**, all **67 prior hashed assets preserved byte-for-byte**. No absolute dependency paths or lockfile changes.
 - Isolated Chromium browser QA: desktop drawer/full page, real 390px mobile viewport, same conversation/cart across navigation, native personalization form, keyboard Escape/focus, separate WhatsApp position and authenticated usage view; **zero JavaScript errors**. Local queue execution uses synthetic Responses receipts and the real database queue worker, not an OpenAI generation. The HTTP-only harness removes only its own upgrade-insecure-requests policy and blocks external browser requests; deployed HTTPS/CSP was not altered. Screenshots are local review artifacts, not evidence of a live release.
 - Live read-only prerequisite: existing server credential could list exact `gpt-6-luna` with HTTP200; no generation, order, payment, shipping or outbound customer message was requested. Real model-ranking quality, remote OpenAI-to-MCP interoperability and physical-device/production-load performance remain acceptance limits.
+
+## Production verification — feature remains OFF
+
+- Reviewed application94dc566 was followed by7b844a6 removing an accidental duplicate addition from the existing failover connection list; the dedicated queue remains separate. Post-correction20tests/121assertions passed on EACH isolated SQLite/MySQL, Pint and exact queue-config checks passed. The initial MySQL container startup was not yet ready; the rerun after readiness passed.
+- Exact66release-file SHA256/readability gates passed,19manifest entries resolved, all70previous served assets retained byte-for-byte. Existing environment/private owners/modes preserved. Only two cached config additions were made; the previous complete configuration was compared unchanged, including AutoPilot5000/day and every existing queue. No broad `config:cache` regeneration or cache flush.
+- Only the new migration ran before routes were published. Six assistant tables remain empty; no queued assistant turns or cost reservations. One dedicated worker, fresh heartbeat, no restarts, approximately39MiB measured memory, with256MiB ceiling. Scheduler service result success; AutoPilot/Codex/conversation PIDs unchanged. Native default/process workers rotated naturally near their prior one-hour maximum before source publication; no refresh was requested.
+- Native authenticated GET under a read-only MySQL transaction using existing authorized actors: owner report200/304ms with visitors/messages/replies/tokens/cost and disabled switch,3restricted staff403 with no report/finance. No web credentials were created. Browser control could not bind/create a tab (`timeoutMs` error), so rendered production browser layout was not independently inspected.
+- HTTPS home/up/cart/newJS/newCSS200; home has no assistant widget, full assistant404, unauthenticated admin302, www301. Sales MCP GET405 is method rejection; disabled MCP POST404 was separately verified. These GET/guard checks are not a full production checkout or paid-model trial.
+- Initial bounded observation22:53:52UTC:76requests/zero5xx; no new Laravel/worker/production-vhost errors; failedjobs86unchanged. Nine required services active. Backups/checkpoints retained. Real Responses/MCP and model-ranking acceptance are pending; enabling the feature still requires a later explicit owner decision and the protected native prerequisites.
