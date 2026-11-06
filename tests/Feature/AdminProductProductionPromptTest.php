@@ -146,6 +146,43 @@ PROMPT);
             ->assertDontSee('برومبت إنتاج: منتج');
     }
 
+    public function test_child_interests_use_the_item_snapshot_before_the_owning_order_and_remain_optional(): void
+    {
+        $product = $this->product('interests-product', 'Interests: {{child_interests}}');
+        $order = Order::create([
+            'order_number' => 'HK-PRODUCT-INTERESTS',
+            'interests' => 'كرة القدم',
+            'status' => 'new',
+        ]);
+        $item = $order->items()->create([
+            'item_type' => 'product',
+            'product_id' => $product->id,
+            'title' => $product->name_ar,
+            'quantity' => 1,
+            'unit_price_cents' => 19500,
+            'total_price_cents' => 19500,
+        ]);
+
+        foreach ([
+            [[], 'كرة القدم'],
+            [['interests' => 'الرسم والفضاء'], 'الرسم والفضاء'],
+            [['interests' => 'كرة القدم', 'fields' => ['interests' => ['value' => 'السباحة']]], 'السباحة'],
+            [['interests' => ''], ''],
+            [['fields' => ['interests' => ['value' => '']]], ''],
+        ] as [$snapshot, $expected]) {
+            $item->update(['personalization_snapshot' => $snapshot]);
+
+            $this->assertSame('Interests: '.$expected, ProductProductionPrompt::renderForItem($item->fresh()));
+            $this->assertSame('Interests: '.$expected, ProductProductionPrompt::forItem($item->fresh(), privateImageInputs: true)->sole()['prompt']);
+        }
+
+        $order->update(['interests' => null]);
+        $item->update(['personalization_snapshot' => []]);
+
+        $this->assertSame('Interests: ', ProductProductionPrompt::renderForItem($item->fresh()));
+        $this->assertSame([], ProductProductionPrompt::unsupportedVariables('{{child_interests}}'));
+    }
+
     public function test_product_edit_page_renders_the_prompt_editor(): void
     {
         $product = $this->product('school-sticker', 'Sticker prompt for {{child_full_name}}');
@@ -155,6 +192,8 @@ PROMPT);
             ->assertOk()
             ->assertSee('برومبت إنتاج المنتج')
             ->assertSee('name="production_prompt_template"', false)
+            ->assertSee('{{child_interests}}')
+            ->assertSee('اهتمامات الطفل')
             ->assertSee('Sticker prompt for {{child_full_name}}');
     }
 
@@ -174,7 +213,7 @@ PROMPT);
                 'personalization_fields' => [
                     'child_name' => ['enabled' => 1, 'required' => 1, 'label' => 'اسم الطفل'],
                 ],
-                'production_prompt_template' => 'Updated product prompt for {{child_full_name}}, age {{child_age}}',
+                'production_prompt_template' => 'Updated product prompt for {{child_full_name}}, age {{child_age}}, interests {{child_interests}}',
                 'inventory_mode' => 'no_tracking',
                 'is_active' => 1,
             ])
@@ -182,14 +221,14 @@ PROMPT);
             ->assertRedirect(route('admin.products.edit', $product));
 
         $this->assertSame(
-            'Updated product prompt for {{child_full_name}}, age {{child_age}}',
+            'Updated product prompt for {{child_full_name}}, age {{child_age}}, interests {{child_interests}}',
             $product->fresh()->production_prompt_template,
         );
 
         $this->actingAs($this->admin())
             ->get(route('admin.products.edit', $product))
             ->assertOk()
-            ->assertSee('Updated product prompt for {{child_full_name}}, age {{child_age}}');
+            ->assertSee('Updated product prompt for {{child_full_name}}, age {{child_age}}, interests {{child_interests}}');
     }
 
     public function test_product_only_group_page_shows_the_sticker_prompt(): void
