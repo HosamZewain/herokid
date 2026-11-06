@@ -14,6 +14,7 @@ use App\Services\SalesAssistant\SalesBudget;
 use App\Services\SalesAssistant\SalesCart;
 use App\Services\SalesAssistant\SalesCartEditor;
 use App\Services\SalesAssistant\SalesCatalog;
+use App\Services\SalesAssistant\SalesChildContext;
 use App\Services\SalesAssistant\SalesPrivacy;
 use App\Services\SalesAssistant\SalesSessions;
 use App\Services\SalesAssistant\SalesSettings;
@@ -68,7 +69,7 @@ class SalesAssistantController extends Controller
             abort(429, 'استنى دقيقة قبل رسائل جديدة.');
         }
         RateLimiter::hit($rate, 60);
-        $text = $privacy->redact($input['message'], $sessions->knownPrivate($request));
+        $text = $privacy->redact($input['message'], $sessions->knownPrivate($request), array_column(app(SalesCatalog::class)->all(), 'title'));
         try {
             $turn = $budget->reserve($conversation, $text, $input['client_nonce']);
         } catch (ValidationException $e) {
@@ -84,11 +85,16 @@ class SalesAssistantController extends Controller
         return response()->json(['turn_id' => $turn->id, 'status' => $turn->fresh()->status], 202)->header('Cache-Control', 'private, no-store');
     }
 
-    public function browse(Request $request, SalesCatalog $catalog)
+    public function browse(Request $request, SalesCatalog $catalog, SalesSessions $sessions)
     {
         $this->check();
         $input = $request->validate(['query' => 'nullable|string|max:500', 'age' => 'nullable|integer|min:0|max:18', 'gender' => 'nullable|in:boy,girl', 'budget_cents' => 'nullable|integer|min:0|max:10000000', 'language' => 'nullable|in:ar,en']);
-        $items = filled($input['query'] ?? '') ? $catalog->search(app(SalesPrivacy::class)->redact($input['query']), $input['age'] ?? null, $input['gender'] ?? null, $input['budget_cents'] ?? null, $input['language'] ?? null) : array_values($catalog->all());
+        $conversation = $sessions->current($request);
+        $lastTurn = $conversation ? SalesTurn::where('conversation_id', $conversation->id)->latest('created_at')->orderByDesc('id')->first() : null;
+        $context = $lastTurn ? app(SalesChildContext::class)->forTurn($lastTurn) : [];
+        $items = $catalog->search(app(SalesPrivacy::class)->redact($input['query'] ?? ''), $context['age'] ?? $input['age'] ?? null,
+            $context['gender'] ?? $input['gender'] ?? null, $input['budget_cents'] ?? null, $input['language'] ?? null);
+        $items = array_values(array_filter($items, fn ($item) => $catalog->eligible($item, $context)));
 
         return response()->json(['cards' => $catalog->cards(array_map(fn ($i) => ['key' => $i['key'], 'reason' => 'شوف التفاصيل والمتطلبات قبل الاختيار.'], array_slice($items, 0, 3)))])->header('Cache-Control', 'private, no-store');
     }

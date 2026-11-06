@@ -64,6 +64,7 @@ class SalesSessions
         return SalesTurn::where('conversation_id', $conversation->id)->where('created_at', '>', now()->subDays(30))->latest('created_at')->orderByDesc('id')->limit(40)->get()->reverse()->map(function ($turn) {
             $result = $turn->result;
             if (is_array($result)) {
+                $result['message'] = app(SalesPrivacy::class)->displayText((string) ($result['message'] ?? ''));
                 $result['cards'] = app(SalesCatalog::class)->cards($result['recommendations'] ?? []);
             }
 

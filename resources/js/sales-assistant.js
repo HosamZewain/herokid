@@ -5,6 +5,22 @@ if (root) {
     const q = (selector) => root.querySelector(selector);
     const panel = q('[data-panel]'), frame = q('[data-purchase-frame]');
     const composer = q('[data-compose]'), input = composer.querySelector('textarea');
+    // Use the actual storefront header and visual viewport, including the mobile keyboard.
+    if (root.dataset.full === '1') {
+        const fitPage = () => {
+            const viewport = window.visualViewport;
+            const top = Math.max(0, root.getBoundingClientRect().top - (viewport?.offsetTop || 0));
+            panel.style.height = `${Math.max(160, (viewport?.height || window.innerHeight) - top)}px`;
+        };
+        fitPage();
+        const header = document.querySelector('.hk-site-header');
+        if (header && typeof ResizeObserver !== 'undefined') new ResizeObserver(fitPage).observe(header);
+        window.addEventListener('resize', fitPage);
+        window.visualViewport?.addEventListener('resize', fitPage);
+        window.visualViewport?.addEventListener('scroll', fitPage);
+        window.addEventListener('pageshow', fitPage);
+    }
+
     let open = root.dataset.full === '1', state = null, timer = null, polling = false, busy = false, previousSignature = '', nonce = null, lastText = null;
     let refreshPromise = null;
     let abortPoll = null, upsellKey = '', returnFocus = null, interest = '', restoredFrame = false;
@@ -49,6 +65,7 @@ if (root) {
     }
     function render() {
         q('[data-cart-count]').textContent = state.cart.line_count;
+        q('.hk-sales-welcome').hidden = state.turns.length > 0;
         q('[data-send]').disabled = busy || pending();
         const signature = JSON.stringify(state.turns);
         if (signature !== previousSignature) {
@@ -61,7 +78,7 @@ if (root) {
                 if (complete && turn.result?.cards?.length) thread.append(cards(turn.result.cards));
             }
             previousSignature = signature;
-            q('[data-messages]').scrollTop = q('[data-messages]').scrollHeight;
+            requestAnimationFrame(() => q('[data-messages]').scrollTo({top:q('[data-messages]').scrollHeight,behavior:'instant'}));
         }
         if (!state.chat_available) notice('الردود الذكية مش متاحة حاليًا؛ البحث والاختيار والسلة شغالين.');
         if (state.upsell_declined) q('[data-upsells]').hidden = true;

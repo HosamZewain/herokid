@@ -83,6 +83,7 @@ class SalesCatalog
     {
         $query = $this->normalize($query);
         $terms = array_values(array_filter(explode(' ', $query), fn ($t) => mb_strlen($t) >= 3));
+        $terms = array_diff($terms, ['قصه', 'قصص', 'حكايه', 'حكايات', 'عاوز', 'عاوزه', 'عايز', 'عايزه', 'رشحلي', 'رشحيلي', 'مناسب', 'مناسبه', 'بنتي', 'لبنتي', 'ابني', 'لابني', 'طفلي', 'للطفل', 'اختار', 'انت', 'حاجه', 'سنين', 'سنوات', 'سنه']);
         $groups = [
             ['صلاه', 'الصلاه', 'يصلي', 'الصلاه', 'المسجد', 'مسجد', 'الفجر', 'عباده'],
             ['كوره', 'الكره', 'القدم', 'كرويه', 'الكوره', 'فوتبول', 'football', 'صلاح', 'هالاند'],
@@ -102,14 +103,10 @@ class SalesCatalog
             if ($language && $item['kind'] === 'story' && ! in_array($language, $item['languages'] ?? [$item['language']], true)) {
                 continue;
             }
-            if ($gender && ! in_array($item['gender'], ['both', 'any', $gender], true)) {
+            if (! $this->eligible($item, ['age' => $age, 'gender' => $gender])) {
                 continue;
             }
             if ($budgetCents !== null && $item['price_cents'] > $budgetCents) {
-                continue;
-            }
-            if ($age !== null && preg_match_all('/(\d+)\s*[-–إلى]+\s*(\d+)/u', CustomerKnowledge::text($item['age']), $ranges, PREG_SET_ORDER)
-                && ! collect($ranges)->contains(fn ($range) => $age >= (int) $range[1] && $age <= (int) $range[2])) {
                 continue;
             }
             $score = 0;
@@ -117,13 +114,25 @@ class SalesCatalog
                 $words = explode(' ', $this->normalize(is_array($item[$field]) ? implode(' ', $item[$field]) : (string) $item[$field]));
                 $score += count(array_intersect($terms, $words)) * $weight;
             }
-            if ($score > 0) {
+            if ($score > 0 || $terms === []) {
                 $scored[$key] = $score;
             }
         }
         arsort($scored);
 
         return array_map(fn ($key) => $all[$key], array_keys(array_slice($scored, 0, 12, true)));
+    }
+
+    public function eligible(array $item, array $context): bool
+    {
+        if (($context['needs_child_choice'] ?? false)
+            || (($context['gender'] ?? null) && ! in_array($item['gender'], ['both', 'any', $context['gender']], true))) {
+            return false;
+        }
+        $age = $context['age'] ?? null;
+
+        return $age === null || ! preg_match_all('/(\d+)\s*[-–إلى]+\s*(\d+)/u', CustomerKnowledge::text($item['age']), $ranges, PREG_SET_ORDER)
+            || collect($ranges)->contains(fn ($range) => $age >= (int) $range[1] && $age <= (int) $range[2]);
     }
 
     public function publicFacts(array $items): array
@@ -138,7 +147,7 @@ class SalesCatalog
         foreach (array_slice($choices, 0, 3) as $choice) {
             $key = $choice['key'] ?? '';
             if (isset($all[$key])) {
-                $cards[] = array_diff_key($all[$key], array_flip(['keywords', 'categories', 'value'])) + ['reason' => app(SalesPrivacy::class)->safeReply($choice['reason'] ?? '')];
+                $cards[] = array_diff_key($all[$key], array_flip(['keywords', 'categories', 'value'])) + ['reason' => app(SalesPrivacy::class)->safeReply($choice['reason'] ?? '', array_column($all, 'title'))];
             }
         }
 

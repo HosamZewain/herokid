@@ -53,7 +53,6 @@
             <div class="hk-sales-footer"><button type="button" data-browse>تصفح الترشيحات</button><button type="button" data-cart-button>السلة <span data-cart-count>0</span></button>
                 @if($whatsapp)<button type="button" data-handoff>كلم الفريق ↗</button>@endif
             </div>
-            <details class="hk-sales-privacy"><summary>خصوصية المحادثة</summary><p>ما تكتبش اسم طفلك أو هاتفك أو عنوانك في الشات. بننقّح الرسائل ونرسل نص الاحتياج لـOpenAI للترشيح؛ الصور وحقول التواصل بتفضل في مسار الطلب الخاص. المحادثة بتتحفظ محليًا مشفرة 30 يومًا، مع إحصائيات استخدام بدون الصور. store:false لا يلغي سجلات المراقبة لدى OpenAI.</p></details>
         </div>
     </section>
     <noscript><p>المساعد يحتاج JavaScript. تقدر تكمل من <a href="{{ route('stories.index') }}">القصص</a> و<a href="{{ route('cart.index') }}">السلة</a>.</p></noscript>

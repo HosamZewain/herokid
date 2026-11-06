@@ -20,6 +20,7 @@ class SalesCapabilities
     {
         return Crypt::encryptString(json_encode(['purpose' => 'storefront-sales-read', 'turn' => $turn->id,
             'nonce' => $turn->capability_nonce, 'expires' => now()->timestamp + config('sales_assistant.capability_ttl', 180),
+            'child_context' => app(SalesChildContext::class)->forTurn($turn),
             'summary' => $summary], JSON_THROW_ON_ERROR));
     }
 
@@ -34,6 +35,7 @@ class SalesCapabilities
         $turn = SalesTurn::find($data['turn'] ?? '');
         abort_unless($turn && $turn->status === 'processing' && hash_equals($turn->capability_nonce, $data['nonce'] ?? ''), 403);
         $turn->setAttribute('safe_cart_summary', $data['summary'] ?? []);
+        $turn->setAttribute('child_context', $data['child_context'] ?? app(SalesChildContext::class)->forTurn($turn));
 
         return $turn;
     }
@@ -57,14 +59,18 @@ class SalesCapabilities
             $locked = SalesTurn::whereKey($turn->id)->lockForUpdate()->firstOrFail();
             abort_unless($locked->status === 'processing' && $locked->tool_calls < config('sales_assistant.max_tool_calls', 4), 429);
             $catalog = app(SalesCatalog::class);
+            $context = $turn->getAttribute('child_context') ?? app(SalesChildContext::class)->forTurn($turn);
             $items = [];
             $result = match ($name) {
-                'search_catalog' => ['items' => $catalog->publicFacts($items = $catalog->search(mb_substr((string) ($args['query'] ?? ''), 0, 500), isset($args['age']) ? (int) $args['age'] : null, $args['gender'] ?? null, isset($args['budget_cents']) ? (int) $args['budget_cents'] : null, $args['language'] ?? null))],
+                'search_catalog' => ['items' => $catalog->publicFacts($items = array_values(array_filter($catalog->search(mb_substr((string) ($args['query'] ?? ''), 0, 500), $context['age'] ?? $args['age'] ?? null, $context['gender'] ?? $args['gender'] ?? null, isset($args['budget_cents']) ? (int) $args['budget_cents'] : null, $args['language'] ?? null), fn ($item) => $catalog->eligible($item, $context))))],
                 'get_catalog_item' => ['item' => $catalog->publicFacts($items = [$catalog->item((string) ($args['key'] ?? ''))])[0]],
                 'get_purchase_requirements' => ['requirements' => $this->requirements(($items = [$catalog->item((string) ($args['key'] ?? ''))])[0])],
                 'get_store_policies' => ['policy' => app(CustomerKnowledge::class)->policy((string) ($args['topic'] ?? ''))],
                 'get_my_cart_summary' => ['cart' => $turn->getAttribute('safe_cart_summary') ?? []],
             };
+            foreach ($items as $item) {
+                abort_unless($catalog->eligible($item, $context), 422, 'اختار منتجًا مناسبًا لعمر الطفل ونوعه المسجلين في المحادثة.');
+            }
             if (strlen(json_encode($result)) > config('sales_assistant.max_tool_bytes', 12000)) {
                 $result = ['message' => 'Narrow your search.'];
                 $items = [];

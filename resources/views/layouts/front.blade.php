@@ -226,7 +226,7 @@
             {{ $slot }}
         </main>
 
-        @unless(request()->attributes->get('sales_assistant_embed'))
+        @unless(request()->attributes->get('sales_assistant_embed') || request()->routeIs('sales.index'))
             <x-whatsapp-floating-button />
             @include('front.partials.footer')
             @if(($settings['sales_assistant_enabled'] ?? (config('sales_assistant.enabled') ? '1':'0')) === '1' && request()->routeIs('home','stories.*','shop.*','packages','cart.*') && ! request()->routeIs('sales.*'))
