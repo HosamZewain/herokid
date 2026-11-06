@@ -13,6 +13,9 @@
                 <a href="#order-automation-controls" class="mt-2 inline-block rounded-lg border border-amber-300 px-3 py-2 text-xs font-bold text-amber-800">التحكم والإيقاف الآمن بعد الصفحة الجارية</a>
             @endif
             @endcan
+            @if($codexRun->production_kind === 'coloring_book' && \Illuminate\Support\Facades\Route::has('admin.orders.codex-scenes.book-pages'))
+                <a href="{{ route('admin.orders.codex-scenes.book-pages', [$order, $codexRun]) }}" class="mt-3 inline-block rounded-lg border px-3 py-2 text-xs font-bold text-indigo-900">عرض صفحات الكتاب وتحميل المحفوظ ومراجعة الناقص</a>
+            @endif
             @if(count($codexRun->scenes ?? []) && $codexRun->production_kind !== 'coloring_book')
                 <a href="{{ route('admin.orders.codex-scenes.download',[$order,$codexRun]) }}" class="mt-3 inline-block rounded-lg border px-3 py-2 text-xs font-bold text-indigo-900">تحميل الكل ({{ count($codexRun->scenes) }} / {{ $codexRun->scene_count ?? 13 }}) — ZIP</a>
             @endif

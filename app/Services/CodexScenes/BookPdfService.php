@@ -117,6 +117,22 @@ class BookPdfService
 
     public static function pageBytes(CodexSceneRun $run, int $number, array $scene): string
     {
+        $bytes = Storage::disk('s3_private')->get(self::pagePath($run, $number, $scene));
+        $size = is_string($bytes) ? @getimagesizefromstring($bytes) : false;
+        if (! $size || $size['mime'] !== 'image/png' || min($size[0], $size[1]) < 1024 || $size[1] <= $size[0]
+            || ! hash_equals($scene['sha256'], hash('sha256', $bytes))) {
+            throw new RuntimeException('PDF page integrity failed');
+        }
+
+        return $bytes;
+    }
+
+    /** Verify ownership/source mapping before exposing even a private thumbnail. */
+    public static function pagePath(CodexSceneRun $run, int $number, array $scene): string
+    {
+        if ($run->production_kind !== 'coloring_book' || $number < 1 || $number > $run->scene_count) {
+            throw new RuntimeException('Invalid book page number');
+        }
         $sourceId = $scene['source_run_id'] ?? $run->id;
         $sourceNumber = (int) ($scene['source_scene'] ?? $number);
         $source = $sourceId === $run->id ? $run : CodexSceneRun::find($sourceId);
@@ -134,14 +150,8 @@ class BookPdfService
         if (! in_array($scene['path'] ?? '', [$prefix.'scene-'.sprintf('%02d', $sourceNumber).'.png', $prefix.'page-'.sprintf('%02d', $sourceNumber).'-a4.png'], true)) {
             throw new RuntimeException('PDF page path mismatch');
         }
-        $bytes = Storage::disk('s3_private')->get($scene['path']);
-        $size = is_string($bytes) ? @getimagesizefromstring($bytes) : false;
-        if (! $size || $size['mime'] !== 'image/png' || min($size[0], $size[1]) < 1024 || $size[1] <= $size[0]
-            || ! hash_equals($scene['sha256'], hash('sha256', $bytes))) {
-            throw new RuntimeException('PDF page integrity failed');
-        }
 
-        return $bytes;
+        return $scene['path'];
     }
 
     public function render(CodexSceneRun $run): string

@@ -1,3 +1,4 @@
+@include('admin.orders._book-pages-links')
 @isset($workspaceSummary)
 <section class="mb-4 rounded-2xl border-2 border-indigo-200 bg-white p-5" aria-label="وضع الطلب في الأوتوميشن">
     <h3 class="mb-3 text-lg font-black">وضع الطلب في الأوتوميشن</h3>

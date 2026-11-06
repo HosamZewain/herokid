@@ -30,6 +30,12 @@ class OrderGenerationBanner
             ]);
         $items = OrderItem::whereIn('id', $runs->pluck('order_item_id')->filter())->pluck('title', 'id');
 
+        $bookPageRuns = CodexSceneRun::whereIn('order_id', $orders)->where('production_kind', 'coloring_book')
+            ->whereNull('book_pdf->repair_parent')
+            ->where(fn ($q) => $q->whereNull('book_pdf->recovery->status')->orWhere('book_pdf->recovery->status', '!=', 'completed'))
+            ->latest()->get(['id', 'order_id', 'order_item_id', 'scene_count', 'scenes', 'status', 'book_pdf', 'created_at']);
+        $bookPageTitles = OrderItem::whereIn('id', $bookPageRuns->pluck('order_item_id'))->pluck('title', 'id');
+
         $legacyBooks = LegacyBookAdmission::candidates()->whereIn('order_id', $orders)->with('order:id,child_name')->get();
 
         return ['legacyBooks' => $legacyBooks, 'workspaceOrder' => $order, 'workspaceSummary' => app(OrderAutomationSummary::class)->forKeys([$order->checkoutGroupKey()])[$order->checkoutGroupKey()], 'unstartedBooks' => OrderItem::whereIn('order_id', $orders)->whereNotIn('id', $legacyBooks->pluck('id'))->whereHas('productionComponents', fn ($q) => $q->where('production_stage', 'book_interior'))->whereNotIn('id', CodexSceneRun::where('production_kind', 'coloring_book')->whereNotNull('order_item_id')->select('order_item_id'))->with('order')->get(), 'generationRows' => $runs->map(function ($run) use ($items) {
@@ -49,6 +55,6 @@ class OrderGenerationBanner
                 'child' => $run->order?->child_name,
                 'status' => $run->status, 'done' => $done, 'total' => $total,
             ];
-        })];
+        }), 'bookPageRuns' => $bookPageRuns, 'bookPageTitles' => $bookPageTitles];
     }
 }

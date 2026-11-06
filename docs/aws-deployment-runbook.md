@@ -1,5 +1,9 @@
 # HeroKid AWS deployment and agent handoff
 
+## 6 November 2026 — book page review/retry and saved-page downloads PREPARED
+
+Owner requested one more attempt for a failed page, a complete PDF and access to saved pages, continuing the approved automation correction/publication scope. Isolated `codex/book-page-retry-and-download-20261106`, based on revalidated AWS/Main **db5eecc05652aebf1b9836ead1b27abc9c5e589b**. Exact-content staff review permits one bounded replacement for a refused page under unchanged provider content checks; automatic refusal retry remains off. Authenticated gallery/individual PNG/saved-page ZIP and sibling-order checkout links preserve page numbers, ownership/source checks and full-count PDF delivery. [Behavior, tests and boundaries](book-page-review-and-download-2026-11-06.md). PHP8.3 SQLite/MySQL each521tests/4807assertions pass. No live retry, pause release, customer message, new resource or publication is implied by this preparation entry. Actual application/verification/checkpoint will be recorded below after deployment.
+
 ## 5 November 2026 — approved replacement identity recovery DEPLOYED
 
 Owner explicitly requested completion and immediate deployment for HK11-164 and equivalent cases. Application **4cd9237fcaf177dfc50444b8928fe90623f8a25d**, based on revalidated AWS/Main **cf584eca6fad9d75c947ce77fe05eba6540a7f6f**, deployed **18:57:43–18:57:53UTC /20:57Cairo** from isolated `codex/identity-replacement-recovery-20261105`, preserving the concurrent TikTok release. Exact replacement identity selection, atomic native staff approval, preservation of old preview/task/rejection/send evidence, current consent response checkpoint for Auto Pilot, and corrected story/manual-artwork guidance. [Case, implementation and verification boundaries](approved-identity-recovery-2026-11-05.ar.md).

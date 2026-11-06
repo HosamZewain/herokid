@@ -1834,6 +1834,244 @@ class ProductReviewRuntimeTest extends TestCase
         BookPdfService::pageBytes($final->fresh(), 2, $tampered);
     }
 
+    private function reviewedBookFixture(): array
+    {
+        $run = $this->missingBookFixture();
+        $progress = $run->scene_progress;
+        $progress[2]['code'] = 'content_review';
+        $snapshot = $run->snapshot;
+        $snapshot['texts'][1] = ['scene_number' => 2, 'title' => 'Synthetic beach activity', 'text' => 'A child collecting seashells with a parent.'];
+        $run->update(['snapshot' => $snapshot, 'scene_progress' => $progress, 'book_pdf' => ['status' => 'withheld',
+            'recovery' => ['status' => 'blocked', 'reason' => 'رفض محتوى صفحة 2 يحتاج مراجعة.', 'children' => []]]]);
+        $path = config('codex_scenes.spool').'/outbox/'.$run->id.'/status.json';
+        $state = json_decode(file_get_contents($path), true);
+        $state['scene_progress'] = $progress;
+        file_put_contents($path, json_encode($state));
+        DB::table('order_automation_controls')->updateOrInsert(['checkout_key' => $run->checkout_key], ['state' => 'paused', 'version' => 7, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('order_automation_holds')->insert(['checkout_key' => $run->checkout_key, 'user_id' => $this->actor->id,
+            'fingerprint' => hash('sha256', 'synthetic-hold'), 'runs' => '{}', 'confirmations' => '{}', 'created_at' => now(), 'updated_at' => now()]);
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $this->actingAs($admin);
+
+        return [$run->fresh(), $admin];
+    }
+
+    private function reviewedBookPayload(CodexSceneRun $run, User $actor): array
+    {
+        $service = app(BookPageRecovery::class);
+
+        return ['confirm_review' => 1, 'preview_token' => $service->reviewToken($service->reviewPlan($run->fresh(), $actor))];
+    }
+
+    public function test_saved_book_pages_are_visible_on_the_checkout_and_in_a_read_only_paginated_gallery(): void
+    {
+        [$run] = $this->reviewedBookFixture();
+        $before = $run->getRawOriginal();
+        $this->get(route('admin.orders.groups.show', $run->order))->assertOk()->assertSee('عرض الصفحات المحفوظة وتحميلها');
+        $this->get(route('admin.orders.codex-scenes.book-pages', [$run->order, $run]))->assertOk()
+            ->assertSee('2 / 3 صفحة محفوظة')->assertSee('تحميل الصفحة 1')->assertSee('تحميل الصفحة 3')
+            ->assertSee('الصفحات الناقصة: 2')->assertSee('A child collecting seashells with a parent.')
+            ->assertSee('طلب محاولة واحدة بعد مراجعة المحتوى')->assertDontSee('synthetic-repair-cover.png');
+        $this->assertSame($before, $run->fresh()->getRawOriginal());
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_book_page_archives_preserve_original_numbers_bytes_and_an_explicit_missing_page_index(): void
+    {
+        [$run] = $this->reviewedBookFixture();
+        $response = $this->get(route('admin.orders.codex-scenes.download', [$run->order, $run]));
+        $response->assertOk()->assertDownload();
+        $path = $response->baseResponse->getFile()->getPathname();
+        try {
+            $zip = new \ZipArchive;
+            $this->assertTrue($zip->open($path));
+            $this->assertSame(3, $zip->numFiles);
+            $this->assertSame(Storage::disk('s3_private')->get($run->scenes[1]['path']), $zip->getFromName('page-01.png'));
+            $this->assertSame(Storage::disk('s3_private')->get($run->scenes[3]['path']), $zip->getFromName('page-03.png'));
+            $this->assertFalse($zip->getFromName('page-02.png'));
+            $index = json_decode($zip->getFromName('manifest.json'), true);
+            $this->assertSame([2], $index['missing_pages']);
+            $this->assertSame([1, 3], $index['saved_pages']);
+            $this->assertFalse($index['complete']);
+            $this->assertStringNotContainsString($run->scenes[1]['path'], $zip->getFromName('manifest.json'));
+            $zip->close();
+        } finally {
+            @unlink($path);
+        }
+        $this->assertDatabaseCount('order_attachments', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_individual_book_page_downloads_validate_bytes_and_cannot_cross_book_or_order_boundaries(): void
+    {
+        [$run] = $this->reviewedBookFixture();
+        $url = route('admin.orders.codex-scenes.image', [$run->order, $run, 1, 'download' => 1]);
+        $response = $this->get($url)->assertOk();
+        $this->assertSame(Storage::disk('s3_private')->get($run->scenes[1]['path']), $response->getContent());
+        $this->assertStringContainsString('attachment', $response->headers->get('Content-Disposition'));
+        $this->get(route('admin.orders.codex-scenes.image', [$run->order, $run, 2]))->assertNotFound();
+        $foreign = $this->book()->order;
+        $this->get(route('admin.orders.codex-scenes.book-pages', [$foreign, $run]))->assertNotFound();
+        $this->get(route('admin.orders.codex-scenes.download', [$foreign, $run]))->assertNotFound();
+        Storage::disk('s3_private')->put($run->scenes[1]['path'], 'corrupt');
+        $this->get($url)->assertNotFound();
+        $this->get(route('admin.orders.codex-scenes.download', [$run->order, $run]))->assertStatus(503);
+    }
+
+    public function test_a_reviewed_book_retry_requires_explicit_consent_and_keeps_the_pause_and_original_content(): void
+    {
+        [$run, $admin] = $this->reviewedBookFixture();
+        $before = $run->scenes;
+        $snapshot = $run->snapshot;
+        $payload = $this->reviewedBookPayload($run, $admin);
+        $url = route('admin.orders.workspace.book-pages-retry', [$run->order, $run]);
+        $this->post($url, ['preview_token' => $payload['preview_token']])->assertSessionHasErrors('confirm_review');
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        $this->post($url, $payload)->assertSessionHasNoErrors()->assertRedirect();
+        $child = CodexSceneRun::whereKeyNot($run->id)->sole();
+        $this->assertSame('waiting_slot', $child->status);
+        $this->assertSame(1, $child->scene_count);
+        $this->assertSame($snapshot['texts'][1]['text'], $child->snapshot['texts'][0]['text']);
+        $this->assertSame($snapshot['prompt'], $child->snapshot['prompt']);
+        $this->assertSame(2, $child->snapshot['book_repair']['page']);
+        $this->assertSame($admin->id, $child->snapshot['book_repair']['reviewed_content']['actor_id']);
+        $this->assertSame($before, $run->fresh()->scenes);
+        $this->assertSame($snapshot, $run->fresh()->snapshot);
+        $this->assertDatabaseHas('order_automation_controls', ['checkout_key' => $run->checkout_key, 'state' => 'paused', 'version' => 7]);
+        $this->assertDatabaseCount('order_automation_holds', 1);
+        $this->assertDatabaseHas('admin_activity_logs', ['action' => 'order.book_pages_reviewed_retry']);
+        $this->post($url, $payload)->assertSessionHasErrors('book_review');
+        app(BookPageRecovery::class)->pending();
+        $this->assertDatabaseCount('codex_scene_runs', 2);
+        Http::assertNothingSent();
+    }
+
+    public function test_reviewed_book_retry_failure_never_repeats_the_refusal_or_publishes_a_partial_pdf(): void
+    {
+        [$run, $admin] = $this->reviewedBookFixture();
+        $this->post(route('admin.orders.workspace.book-pages-retry', [$run->order, $run]), $this->reviewedBookPayload($run, $admin))->assertSessionHasNoErrors();
+        $child = CodexSceneRun::whereKeyNot($run->id)->sole();
+        $child->update(['status' => 'needs_manual', 'active_slot' => null, 'scene_progress' => [1 => ['status' => 'failed', 'code' => 'content_review']]]);
+        app(BookPageRecovery::class)->pending();
+        app(BookPageRecovery::class)->pending();
+        $this->assertSame('blocked', $run->fresh()->book_pdf['recovery']['status']);
+        $this->assertDatabaseCount('codex_scene_runs', 2);
+        $this->assertDatabaseCount('order_attachments', 0);
+        $this->get(route('admin.orders.codex-scenes.book-pages', [$run->order, $run]))->assertOk()->assertDontSee('طلب محاولة واحدة بعد مراجعة المحتوى');
+        Http::assertNothingSent();
+    }
+
+    public function test_reviewed_book_retry_success_builds_a_complete_pdf_and_redirects_to_all_saved_pages(): void
+    {
+        [$run, $admin] = $this->reviewedBookFixture();
+        $original = $run->scenes;
+        $this->post(route('admin.orders.workspace.book-pages-retry', [$run->order, $run]), $this->reviewedBookPayload($run, $admin))->assertSessionHasNoErrors();
+        $child = CodexSceneRun::whereKeyNot($run->id)->sole();
+        $source = $this->pdfFixture(4);
+        $scene = $source->scenes[4];
+        $bytes = Storage::disk('s3_private')->get($scene['path']);
+        $path = 'orders/'.$child->order_id.'/codex-scenes/'.$child->id.'/page-01-a4.png';
+        Storage::disk('s3_private')->put($path, $bytes);
+        $child->update(['status' => 'completed', 'active_slot' => null, 'scenes' => [1 => ['path' => $path, 'sha256' => hash('sha256', $bytes), 'source_run_id' => $child->id, 'attachment_id' => null]]]);
+        $source->delete();
+        $final = app(BookPageRecovery::class)->advance($run->fresh());
+        $this->assertTrue($final->fresh()->book_pdf['complete']);
+        $this->assertSame(3, count($final->scenes));
+        $this->assertSame($original[1], $final->scenes[1]);
+        $this->assertSame($original[3], $final->scenes[3]);
+        $this->get(route('admin.orders.codex-scenes.book-pages', [$run->order, $run]))->assertRedirect(route('admin.orders.codex-scenes.book-pages', [$run->order, $final]));
+        $this->get(route('admin.orders.codex-scenes.book-pages', [$run->order, $final]))->assertOk()->assertSee('تحميل PDF الطباعة الكامل');
+        $this->get(route('admin.orders.codex-scenes.image', [$run->order, $final, 2, 'download' => 1]))->assertOk()->assertContent($bytes);
+        $this->assertDatabaseHas('order_automation_controls', ['state' => 'paused', 'version' => 7]);
+        if ($output = getenv('HEROKID_BOOK_QA_OUTPUT')) {
+            file_put_contents($output, Storage::disk('s3_private')->get($final->fresh()->book_pdf['path']));
+        }
+        Http::assertNothingSent();
+    }
+
+    public function test_reviewed_book_retry_rejects_stale_control_and_changed_selection_before_any_generation(): void
+    {
+        [$run, $admin] = $this->reviewedBookFixture();
+        $payload = $this->reviewedBookPayload($run, $admin);
+        $url = route('admin.orders.workspace.book-pages-retry', [$run->order, $run]);
+        DB::table('order_automation_controls')->increment('version');
+        $this->post($url, $payload)->assertStatus(409);
+        $payload = $this->reviewedBookPayload($run, $admin);
+        $snapshot = $run->snapshot;
+        $snapshot['texts'][1]['text'] = 'A changed synthetic activity';
+        $run->update(['snapshot' => $snapshot]);
+        $this->post($url, $payload)->assertStatus(409);
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        $this->assertDatabaseMissing('admin_activity_logs', ['action' => 'order.book_pages_reviewed_retry']);
+    }
+
+    public function test_reviewed_book_retry_requires_assignment_permissions_payment_and_settled_worker_output(): void
+    {
+        [$run, $admin] = $this->reviewedBookFixture();
+        $payload = $this->reviewedBookPayload($run, $admin);
+        $url = route('admin.orders.workspace.book-pages-retry', [$run->order, $run]);
+        $staff = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $staff->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.photos.view'])->pluck('id'));
+        $this->actingAs($staff)->get(route('admin.orders.codex-scenes.book-pages', [$run->order, $run]))->assertOk()->assertDontSee('طلب محاولة واحدة بعد مراجعة المحتوى');
+        $this->post($url, $payload)->assertForbidden();
+        $staff->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update', 'orders.photos.view', 'orders.automation.control', 'orders.production_prompt.manage'])->pluck('id'));
+        $this->actingAs($staff->fresh())->post($url, $payload)->assertForbidden();
+        $this->actingAs($admin);
+        $run->order->updateQuietly(['paid_amount_cents' => 0]);
+        $this->post($url, $payload)->assertSessionHasErrors('book_review');
+        $run->order->updateQuietly(['paid_amount_cents' => 10000]);
+        file_put_contents(config('codex_scenes.spool').'/outbox/'.$run->id.'/scene-02.json', '{}');
+        $this->post($url, $payload)->assertSessionHasErrors('book_review');
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_book_gallery_links_include_a_book_on_a_different_order_in_the_same_checkout(): void
+    {
+        $first = $this->book()->order;
+        $run = $this->pdfFixture(3);
+        $run->order->updateQuietly(['checkout_group_key' => $first->checkoutGroupKey()]);
+        $run->update(['checkout_key' => $first->checkoutGroupKey()]);
+        $this->actingAs(User::factory()->create(['role' => 'admin']))->get(route('admin.orders.groups.show', $first))
+            ->assertOk()->assertSee(route('admin.orders.codex-scenes.book-pages', [$run->order_id, $run]), false);
+        Http::assertNothingSent();
+    }
+
+    public function test_book_gallery_pagination_and_thumbnail_mapping_cannot_expose_a_different_book(): void
+    {
+        $run = $this->pdfFixture(50);
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+        $this->get(route('admin.orders.codex-scenes.book-pages', [$run->order, $run, 'page' => 2]))->assertOk()
+            ->assertSee('تحميل الصفحة 49')->assertSee('تحميل الصفحة 50')->assertDontSee('تحميل الصفحة 1<', false);
+        $foreign = $this->pdfFixture(1);
+        $scenes = $run->scenes;
+        $scenes[1] = $foreign->scenes[1];
+        $run->update(['scenes' => $scenes]);
+        $this->get(route('admin.orders.codex-scenes.image', [$run->order, $run, 1, 'thumbnail' => 1]))->assertNotFound();
+        $this->get(route('admin.orders.codex-scenes.image', [$run->order, $run, 1, 'download' => 1]))->assertNotFound();
+        $this->assertDatabaseCount('order_attachments', 0);
+    }
+
+    public function test_reviewed_book_retry_is_fenced_by_revoked_authority_or_another_active_book(): void
+    {
+        [$run, $admin] = $this->reviewedBookFixture();
+        $payload = $this->reviewedBookPayload($run, $admin);
+        $url = route('admin.orders.workspace.book-pages-retry', [$run->order, $run]);
+        $active = $run->replicate();
+        $active->id = (string) Str::uuid();
+        $active->status = 'running';
+        $active->active_slot = 1;
+        $active->save();
+        $this->post($url, $payload)->assertSessionHasErrors('book_review');
+        $active->delete();
+        $admin->update(['is_active' => false]);
+        $this->post($url, $payload)->assertForbidden();
+        $this->assertDatabaseCount('codex_scene_runs', 1);
+        $this->assertDatabaseMissing('admin_activity_logs', ['action' => 'order.book_pages_reviewed_retry']);
+        Http::assertNothingSent();
+    }
+
     public function test_missing_book_recovery_does_not_bypass_refusals_replay_historical_runs_or_unsettled_outputs(): void
     {
         $parent = $this->missingBookFixture();

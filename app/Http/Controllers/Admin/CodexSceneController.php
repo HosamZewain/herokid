@@ -6,18 +6,63 @@ use App\Http\Controllers\Controller;
 use App\Models\CodexSceneRun;
 use App\Models\Order;
 use App\Services\CodexScenes\BookPageRecovery;
+use App\Services\CodexScenes\BookPdfService;
 use App\Services\CodexScenes\ManualSceneService;
 use App\Services\CodexScenes\OrderGenerationBanner;
 use App\Services\CodexScenes\SceneTiming;
 use App\Services\Orders\OrderAccess;
 use App\Services\Orders\PrivateOrderThumbnail;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class CodexSceneController extends Controller
 {
+    public function bookPages(Request $request, Order $order, CodexSceneRun $run, BookPageRecovery $recovery)
+    {
+        abort_unless($run->order_id === $order->id && $run->production_kind === 'coloring_book'
+            && $run->scene_count >= 1 && $run->scene_count <= 1000, 404);
+        if (($run->book_pdf['recovery']['status'] ?? '') === 'completed') {
+            $final = CodexSceneRun::where('order_id', $order->id)->where('order_item_id', $run->order_item_id)
+                ->whereKey($run->book_pdf['recovery']['final_run_id'])->where('production_kind', 'coloring_book')->firstOrFail();
+
+            return redirect()->route('admin.orders.codex-scenes.book-pages', [$order, $final]);
+        }
+        $missing = array_values(array_diff(range(1, $run->scene_count), array_map('intval', array_keys($run->scenes ?? []))));
+        $page = min(max(1, $request->integer('page', 1)), (int) ceil($run->scene_count / 48));
+        $numbers = range(($page - 1) * 48 + 1, min($page * 48, $run->scene_count));
+        $pages = new LengthAwarePaginator($numbers, $run->scene_count, 48, $page, ['path' => $request->url()]);
+        $review = null;
+        $reviewError = null;
+        $canReview = app(OrderAccess::class)->controls($order, $request->user()) && $request->user()->hasPermission('orders.production_prompt.manage');
+        if ($canReview && ! isset($run->book_pdf['recovery']['reviewed_pages'])
+            && collect($missing)->contains(fn ($n) => ($run->scene_progress[$n]['code'] ?? '') === 'content_review')) {
+            try {
+                $review = $recovery->reviewPlan($run, $request->user());
+            } catch (ValidationException $e) {
+                $reviewError = collect($e->errors())->flatten()->first();
+            } catch (\RuntimeException) {
+                $reviewError = 'تعذر التحقق من اعتماد الكتاب أو مراجعه الحالية؛ الصور المحفوظة تظل متاحة للعرض والتحميل.';
+            }
+        }
+
+        return response()->view('admin.orders.book-pages', compact('order', 'run', 'missing', 'pages', 'review', 'reviewError', 'canReview'))
+            ->header('Cache-Control', 'private, no-store');
+    }
+
+    public function retryReviewedBook(Request $request, Order $order, CodexSceneRun $run, BookPageRecovery $recovery)
+    {
+        abort_unless($run->order_id === $order->id && $run->production_kind === 'coloring_book', 404);
+        abort_unless(app(OrderAccess::class)->controls($order, $request->user()), 403);
+        $data = $request->validate(['confirm_review' => 'required|accepted', 'preview_token' => 'required|string|max:10000']);
+        $recovery->retryReviewed($run, $request->user(), $request, $data['preview_token']);
+
+        return redirect()->route('admin.orders.codex-scenes.book-pages', [$order, $run])
+            ->with('success', 'سُجلت مراجعة المحتوى وطلب محاولة واحدة للصفحات الناقصة. يُجهز PDF الطباعة بعد اكتمال العدد؛ الصفحات المحفوظة كما هي.');
+    }
+
     public function recoverBook(Request $request, Order $order, CodexSceneRun $run, BookPageRecovery $recovery)
     {
         abort_unless($run->order_id === $order->id && $run->production_kind === 'coloring_book', 404);
@@ -107,18 +152,36 @@ class CodexSceneController extends Controller
         abort_if($path === false, 503);
         $zip = new \ZipArchive;
         $opened = false;
+        $files = [];
         try {
             if ($zip->open($path, \ZipArchive::OVERWRITE) !== true) {
                 throw new \RuntimeException('Cannot prepare scene archive.');
             }
             $opened = true;
             foreach ($scenes as $number => $scene) {
-                $bytes = Storage::disk('s3_private')->get($scene['path']);
+                $bytes = $run->production_kind === 'coloring_book' ? BookPdfService::pageBytes($run, (int) $number, $scene)
+                    : Storage::disk('s3_private')->get($scene['path']);
                 if (! is_string($bytes) || ! hash_equals($scene['sha256'], hash('sha256', $bytes))) {
                     throw new \RuntimeException('Scene storage verification failed.');
                 }
-                if (! $zip->addFromString(sprintf('scene-%02d.png', $number), $bytes)) {
+                $file = tempnam(sys_get_temp_dir(), 'codex-page-');
+                if ($file === false) {
+                    throw new \RuntimeException('Cannot prepare page file.');
+                }
+                $files[] = $file;
+                if (file_put_contents($file, $bytes) !== strlen($bytes)
+                    || ! $zip->addFile($file, sprintf(($run->production_kind === 'coloring_book' ? 'page' : 'scene').'-%02d.png', $number))) {
                     throw new \RuntimeException('Cannot add scene to archive.');
+                }
+                unset($bytes);
+            }
+            if ($run->production_kind === 'coloring_book') {
+                $saved = array_map('intval', array_keys($scenes));
+                $missing = array_values(array_diff(range(1, $run->scene_count), $saved));
+                if (! $zip->addFromString('manifest.json', json_encode(['book_item_id' => $run->order_item_id,
+                    'expected_pages' => $run->scene_count, 'saved_pages' => $saved, 'missing_pages' => $missing,
+                    'complete' => $missing === [], 'purpose' => 'saved_images_review'], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR))) {
+                    throw new \RuntimeException('Cannot add archive index.');
                 }
             }
             if (! $zip->close()) {
@@ -127,7 +190,7 @@ class CodexSceneController extends Controller
             $opened = false;
             clearstatcache(true, $path);
 
-            return response()->download($path, 'order-'.$order->id.'-scenes-'.$run->id.'.zip', [
+            return response()->download($path, 'order-'.$order->id.($run->production_kind === 'coloring_book' ? '-book-pages-' : '-scenes-').$run->id.'.zip', [
                 'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff',
             ])->deleteFileAfterSend(true);
         } catch (\Throwable $e) {
@@ -137,6 +200,10 @@ class CodexSceneController extends Controller
             @unlink($path);
             report($e);
             abort(503, 'تعذر تجهيز تحميل المشاهد؛ حاول مرة أخرى.');
+        } finally {
+            foreach ($files as $file) {
+                @unlink($file);
+            }
         }
     }
 
@@ -145,6 +212,21 @@ class CodexSceneController extends Controller
         abort_unless($run->order_id === $order->id, 404);
         $data = ($run->scenes ?? [])[(string) $scene] ?? null;
         abort_unless($data, 404);
+
+        if ($run->production_kind === 'coloring_book') {
+            try {
+                $path = BookPdfService::pagePath($run, $scene, $data);
+                if (request()->boolean('thumbnail') && ! request()->boolean('download')) {
+                    return app(PrivateOrderThumbnail::class)->response('s3_private', $path);
+                }
+
+                return response(BookPdfService::pageBytes($run, $scene, $data), 200, ['Content-Type' => 'image/png',
+                    'Content-Disposition' => (request()->boolean('download') ? 'attachment' : 'inline').'; filename="page-'.sprintf('%02d', $scene).'.png"',
+                    'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
+            } catch (\RuntimeException) {
+                abort(404, 'تعذر التحقق من ملف الصفحة الحالية.');
+            }
+        }
 
         if (request()->boolean('thumbnail')) {
             return app(PrivateOrderThumbnail::class)->response('s3_private', $data['path']);
