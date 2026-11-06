@@ -1,6 +1,6 @@
 # Book page review, one bounded retry, and saved-page downloads
 
-The owner requested another attempt for a failed page, a complete printable PDF afterward, and a way to see/download already generated pages. This continues the automation correction/publication work. The verified AWS/Main base is `db5eecc05652aebf1b9836ead1b27abc9c5e589b`; the dirty primary mobile/UI checkout is preserved. This preparation record is not deployment proof.
+The owner requested another attempt for a failed page, a complete printable PDF afterward, and a way to see/download already generated pages. This continues the automation correction/publication work. Application `b037548ad66127f9101e47814b64f2dd15f43269` is deployed on AWS/Main, based on `db5eecc05652aebf1b9836ead1b27abc9c5e589b`; the dirty primary mobile/UI checkout is preserved.
 
 ## Observed case and resulting behavior
 
@@ -30,4 +30,12 @@ A synthetic native reviewed-retry flow exported a3-page complete PDF. Poppler co
 
 No schema, config, dependency, Python worker/protocol, infrastructure, queue replay or customer message change. The recovery/collector runs in the existing fresh `codex-scenes:sync` scheduler command; no persistent worker restart is needed for this service/view release. Route and Blade caches are the only required cache refresh. Retain private environment/config, existing route cache ownership/mode, hashed assets and all worker/generator PIDs.
 
-After reviewed recovery records exist, preserve compatible `reviewed_pages` readers and source bindings. Prefer a forward fix; old readers would block reviewed content again. No database restore, metadata erasure, media deletion or historical retry as a release test. Actual deployed SHA/hashes, live GET verification, logs and checkpoint are recorded after authorized application.
+After reviewed recovery records exist, preserve compatible `reviewed_pages` readers and source bindings. Prefer a forward fix; old readers would block reviewed content again. No database restore, metadata erasure, media deletion or historical retry as a release test.
+
+## Actual publication and verification
+
+Applied14:22:21–14:22:24UTC /16:22Cairo on6November. All13release source hashes/readability,70previous assets, manifest, private configuration and original route cache permissions passed. Routes/Blade refreshed; no worker, FPM or Codex restart. All recorded native/AutoPilot/Codex PIDs remained identical, required services active and scheduler result successful. Quota5000and all execution settings stayed unchanged.
+
+At14:23:33UTC, production native-kernel GETs in a read-only database transaction with an existing authorized actor returned: checkout200/684ms, correct sibling book gallery200/480ms, original PNG200/95ms with verified SHA and attachment header, and ZIP200/3270ms. Gallery has19saved page cards, missing18, download controls and the explicit review action. The20-entry archive has19verified original PNGs plus the index identifying missing18of20. Its temporary archive was0600and cleaned after verification. Original book/recovery/control rows and checkout work count remained byte/value identical; the pause is preserved. No live retry, customer message, payment or business POST was submitted. This is not a claim of a20-page HK11-155 PDF.
+
+Browser creation failed technically with `timeoutMs`; production visual/browser-submit verification was unavailable. Public home/up/cart200, www301, unauthenticated gallery302to login. Initial bounded14:24:05UTC logs:75HTTP requests/zero5xx and zero new Laravel/Nginx/FPM errors;85historical failed jobs unchanged. Recovery checkpoint `/home/ubuntu/herokid-before-book-pages-20261106`, private release evidence `/home/ubuntu/herokid-book-pages-release-20261106`. Documentation-only successor does not require service/cache refresh.
