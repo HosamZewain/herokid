@@ -31,6 +31,11 @@ return [
 
     'connections' => [
 
+        'storefront-assistant' => [
+            'driver' => 'database', 'connection' => env('DB_QUEUE_CONNECTION'), 'table' => 'jobs',
+            'queue' => 'storefront-assistant', 'retry_after' => 120, 'after_commit' => true,
+        ],
+
         'sync' => [
             'driver' => 'sync',
         ],
@@ -110,6 +115,11 @@ return [
         'failover' => [
             'driver' => 'failover',
             'connections' => [
+
+                'storefront-assistant' => [
+                    'driver' => 'database', 'connection' => env('DB_QUEUE_CONNECTION'), 'table' => 'jobs',
+                    'queue' => 'storefront-assistant', 'retry_after' => 120, 'after_commit' => true,
+                ],
                 'database',
                 'deferred',
             ],

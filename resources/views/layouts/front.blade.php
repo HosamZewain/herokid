@@ -174,7 +174,7 @@
     @stack('styles')
 </head>
 
-<body class="herokid-front font-sans antialiased text-gray-900 bg-white">
+<body data-sales-embedded="{{ request()->attributes->get('sales_assistant_embed') ? '1':'0' }}" class="herokid-front font-sans antialiased text-gray-900 bg-white">
     <a href="#main-content" class="hk-skip-link">انتقل للمحتوى</a>
     @if($metaPixelId !== '')
         <noscript><img height="1" width="1" style="display:none"
@@ -187,7 +187,9 @@
     @endphp
     <div class="min-h-screen flex flex-col">
 
-        @include('front.partials.header')
+        @unless(request()->attributes->get('sales_assistant_embed'))
+            @include('front.partials.header')
+        @endunless
 
         @if(is_array(session('cart_added_notice')))
             @php($cartAddedNotice = session('cart_added_notice'))
@@ -224,11 +226,18 @@
             {{ $slot }}
         </main>
 
-        <x-whatsapp-floating-button />
-
-        @include('front.partials.footer')
+        @unless(request()->attributes->get('sales_assistant_embed'))
+            <x-whatsapp-floating-button />
+            @include('front.partials.footer')
+            @if(($settings['sales_assistant_enabled'] ?? (config('sales_assistant.enabled') ? '1':'0')) === '1' && request()->routeIs('home','stories.*','shop.*','packages','cart.*') && ! request()->routeIs('sales.*'))
+                @include('front.sales-assistant.widget')
+            @endif
+        @endunless
     </div>
     @stack('scripts')
+    @if(request()->attributes->get('sales_assistant_embed'))
+        @vite('resources/js/sales-assistant-embed.js')
+    @endif
 </body>
 
 </html>

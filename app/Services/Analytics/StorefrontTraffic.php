@@ -14,7 +14,7 @@ class StorefrontTraffic
 {
     public static function publicCommerce(Request $request): bool
     {
-        return $request->routeIs('home', 'shop.*', 'stories.index', 'stories.show', 'packages', 'cart.index', 'checkout.success')
+        return $request->routeIs('home', 'sales.index', 'shop.*', 'stories.index', 'stories.show', 'packages', 'cart.index', 'checkout.success')
             && $request->user()?->role !== 'admin'
             && $request->header('DNT') !== '1' && $request->header('Sec-GPC') !== '1';
     }

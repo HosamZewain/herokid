@@ -31,6 +31,7 @@ use App\Services\Orders\OrderAccess;
 use App\Services\Orders\OrderAutomationSummary;
 use App\Services\Payments\HistoricalPaymentSource;
 use App\Services\Payments\PaymentReconciliationService;
+use App\Services\SalesAssistant\SalesCatalog;
 use App\Support\AdminPermissionRegistry;
 use App\Support\RequestSettings;
 use App\Support\Seo;
@@ -39,8 +40,10 @@ use App\View\Composers\OrderMessageHistoryComposer;
 use App\View\Composers\PublicImageViewComposer;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Queue\Events\Looping;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
@@ -73,6 +76,8 @@ class AppServiceProvider extends ServiceProvider
             DeliveryCountry::class, DeliveryGovernorate::class] as $feedModel) {
             $feedModel::saved(fn () => RoboDeskFeedCache::invalidate());
             $feedModel::deleted(fn () => RoboDeskFeedCache::invalidate());
+            $feedModel::saved(fn () => Cache::forget(SalesCatalog::CACHE_KEY));
+            $feedModel::deleted(fn () => Cache::forget(SalesCatalog::CACHE_KEY));
         }
         foreach (array_keys(PublicCatalogImageSources::FIELDS) as $model) {
             $model::observe(PublicCatalogImageObserver::class);
@@ -86,6 +91,22 @@ class AppServiceProvider extends ServiceProvider
                 return [Limit::perMinute($maximum)->by($limiter.':'.$key), Limit::perMinute(3000)->by($limiter.':global')];
             });
         }
+        Queue::looping(function (Looping $event) {
+            static $next = 0;
+            if ($event->connectionName === 'storefront-assistant' && now()->timestamp >= $next) {
+                try {
+                    Cache::put('sales-assistant:worker-heartbeat', now()->timestamp, 120);
+                } catch (\Throwable) {
+                }
+                $next = now()->timestamp + 10;
+            }
+        });
+        RateLimiter::for('sales-browser', function (Request $request) {
+            $session = hash_hmac('sha256', $request->session()->getId(), config('app.key'));
+            $ip = hash_hmac('sha256', (string) $request->ip(), config('app.key'));
+
+            return [Limit::perMinute(120)->by('sales-browser:'.$session), Limit::perMinute(1200)->by('sales-ip:'.$ip)];
+        });
         RateLimiter::for('photo-uploads', function (Request $request): Limit {
             $sessionToken = (string) $request->session()->get('photo_upload.token', '');
             $key = $sessionToken !== ''

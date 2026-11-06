@@ -1152,3 +1152,5 @@ require __DIR__.'/auth.php';
 // Read-only, time-limited customer access to this process's identity output only.
 Route::get('/order-process/identity-preview/{run}', [ProcessIdentityPreviewController::class, 'show'])->middleware(['signed', 'throttle:60,1'])->withoutMiddleware(TrackCustomerVisit::class)->name('order-process.identity-preview');
 Route::get('/order-process/identity-preview/{run}/image/{identity}', [ProcessIdentityPreviewController::class, 'image'])->middleware(['signed', 'throttle:60,1'])->withoutMiddleware(TrackCustomerVisit::class)->name('order-process.identity-image');
+
+require __DIR__.'/sales-assistant.php';

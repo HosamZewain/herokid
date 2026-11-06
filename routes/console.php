@@ -4,6 +4,8 @@ use App\Jobs\AdvanceProductionAutomationRun;
 use App\Jobs\TickPuzzleAutomation;
 use App\Models\AiProvider;
 use App\Models\ProductionAutomationRun;
+use App\Models\SalesConversation;
+use App\Models\SalesTurn;
 use App\Services\Ai\AiProviderCredentialService;
 use App\Services\Ai\AiProviderRegistrySyncer;
 use App\Services\Bosta\BostaAutomaticPickupService;
@@ -20,6 +22,7 @@ use App\Services\ProductAutomation\PuzzleAutomation;
 use App\Services\ProductionStudio\ProductionAutomationFinalProofService;
 use App\Services\RoboDesk\Conversations\ActiveConversationRefreshService;
 use App\Services\RoboDesk\Conversations\ConversationReplyService;
+use App\Services\SalesAssistant\SalesBudget;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\AdminPermissionSyncer;
 use App\Support\AdminRoleSyncer;
@@ -309,3 +312,19 @@ Artisan::command('order-workspace:settle', function () {
     }
 })->purpose('Settle requested safe pauses without retrying provider operations');
 Schedule::command('order-workspace:settle')->everyMinute()->withoutOverlapping(3);
+
+// Only assistant text/ephemeral turns are purged. Native orders, photos and attribution remain.
+Artisan::command('sales-assistant:maintain', function () {
+    $budget = app(SalesBudget::class);
+    SalesTurn::whereIn('status', ['queued', 'processing'])->where('updated_at', '<', now()->subMinutes(5))->orderBy('id')->chunkById(100, function ($turns) use ($budget) {
+        foreach ($turns as $turn) {
+            $budget->settle($turn, $turn->status === 'queued' ? ['input_tokens' => 0, 'output_tokens' => 0] : [], $turn->status === 'queued' ? 'expired' : 'uncertain', null);
+        }
+    });
+    // Text retention is measured per message, not extended forever by an active conversation.
+    SalesTurn::where('created_at', '<', now()->subDays(30))->whereNotIn('status', ['queued', 'processing'])->delete();
+    SalesConversation::where('updated_at', '<', now()->subDays(30))->delete();
+    DB::table('sales_session_days')->where('day', '<', now('Africa/Cairo')->subDays(31)->toDateString())->delete();
+    $this->info('Expired assistant text removed; unfinished replies settled without provider retries.');
+})->purpose('Purge assistant text after 30 days, retaining aggregate usage and order attribution');
+Schedule::command('sales-assistant:maintain')->everyFiveMinutes()->withoutOverlapping(5);

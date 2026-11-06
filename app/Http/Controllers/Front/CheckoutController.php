@@ -26,6 +26,7 @@ use App\Services\Orders\CheckoutSubmissionService;
 use App\Services\Orders\CustomerOrderSelfService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Services\Pricing\StoryPricingService;
+use App\Services\SalesAssistant\SalesCheckout;
 use App\Services\Stories\StoryLanguageAvailability;
 use App\Services\Uploads\TemporaryPhotoUploadService;
 use App\Support\MarketingAttribution;
@@ -87,6 +88,10 @@ class CheckoutController extends Controller
             'previous_order_reference' => ['nullable', 'string', 'max:50'],
         ]);
 
+        if ($request->attributes->get('sales_assistant_embed') && ($validated['previous_order_action'] ?? '') === 'cancel_previous') {
+            throw ValidationException::withMessages(['previous_order_action' => 'المساعد مخصص لطلب جديد. لإدارة طلب سابق استخدم مسار متابعة الطلب أو كلم الفريق.']);
+        }
+
         $country = DeliveryCountry::where('active', true)->findOrFail($validated['delivery_country_id']);
         $governorate = DeliveryGovernorate::where('active', true)
             ->where('delivery_country_id', $country->id)
@@ -97,6 +102,10 @@ class CheckoutController extends Controller
         );
 
         $sessionCart = session('cart.items', []);
+        if ($request->attributes->get('sales_assistant_embed')) {
+            $sessionCart = app(SalesCheckout::class)->refreshCart($sessionCart);
+            session(['cart.items' => $sessionCart]);
+        }
         $currentCart = $cartPricing->refresh($sessionCart);
         if ($currentCart !== $sessionCart) {
             session(['cart.items' => $currentCart]);
@@ -154,6 +163,9 @@ class CheckoutController extends Controller
             return ((int) ($item['line_total_cents'] ?? 0)) / 100;
         });
         $deliveryFee = $this->deliveryFee($country, $governorate);
+        if ($request->attributes->get('sales_assistant_embed') && ! $request->filled('_sales_assistant_quote')) {
+            return app(SalesCheckout::class)->review($request, $sessionCart, $validated, $subtotal, $deliveryFee, $country->name, $governorate->name);
+        }
         $checkoutGroup = 'CHK-'.now()->format('Ymd').'-'.strtoupper(Str::random(6));
         $checkoutSessionId = $request->session()->getId();
         $attribution = $this->attributionSnapshot($request);
@@ -188,6 +200,9 @@ class CheckoutController extends Controller
                 $deliveryFee = $shippingOffer['delivery_fee'];
                 if (isset($validated['expected_delivery_fee']) && (int) round($validated['expected_delivery_fee'] * 100) !== (int) round($deliveryFee * 100)) {
                     throw ValidationException::withMessages(['expected_delivery_fee' => 'تغير عرض الشحن أو تكلفة التوصيل. راجع الإجمالي المحدث ثم أكد الطلب مرة أخرى.']);
+                }
+                if ($request->attributes->get('sales_assistant_embed')) {
+                    app(SalesCheckout::class)->verify($request, $sessionCart, $validated, (int) round($subtotal * 100), $discountCents, (int) round($deliveryFee * 100));
                 }
                 $discountReason = $promotion['promo'] ? 'كود خصم: '.$promotion['promo']->code : null;
                 $itemCount = count($cart);
@@ -532,6 +547,9 @@ class CheckoutController extends Controller
                 }
                 if ($orderIds === []) {
                     throw new \RuntimeException('No purchasable cart items remain.');
+                }
+                if ($orderIds !== []) {
+                    app(SalesCheckout::class)->attribute($request, $checkoutGroup, max(0, (int) round($subtotal * 100) - $discountCents) + (int) round($deliveryFee * 100));
                 }
                 $submissions->complete($submission['key'], $orderIds);
                 app(ProcessEvents::class)->checkoutCompleted(Order::findOrFail($orderIds[0]));

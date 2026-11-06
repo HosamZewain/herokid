@@ -261,6 +261,7 @@
                         <p class="px-3 text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">التقارير</p>
                         @can('analytics.view')
                             <a href="{{ route('admin.analytics.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.analytics.*') ? $activeLink : $idleLink }}">تحليلات الموقع</a>
+                            <a href="{{ route('admin.sales-assistant.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.sales-assistant.*') ? $activeLink : $idleLink }}">مساعد المبيعات — الاستخدام</a>
                             <a href="{{ route('admin.app-download-analytics.index') }}" class="{{ $navLink }} {{ request()->routeIs('admin.app-download-analytics.*') ? $activeLink : $idleLink }}">إحصائيات صفحة التطبيق</a>
                         @endcan
                         @can('sales_reports.view')

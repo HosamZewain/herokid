@@ -19,7 +19,7 @@
     ]
   },
   "resources/css/app.css": {
-    "file": "assets/app-ClDnbVgf.css",
+    "file": "assets/app-DuVLuvON.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -43,6 +43,15 @@
     "name": "homepage",
     "names": [
       "homepage.css"
+    ]
+  },
+  "resources/css/sales-assistant.css": {
+    "file": "assets/sales-assistant-BODlkb5R.css",
+    "src": "resources/css/sales-assistant.css",
+    "isEntry": true,
+    "name": "sales-assistant",
+    "names": [
+      "sales-assistant.css"
     ]
   },
   "resources/js/admin-conversations.js": {
@@ -110,6 +119,18 @@
     "file": "assets/order-workspace-Dg7jrtS-.js",
     "name": "order-workspace",
     "src": "resources/js/order-workspace.js",
+    "isEntry": true
+  },
+  "resources/js/sales-assistant-embed.js": {
+    "file": "assets/sales-assistant-embed-BOP3rl-f.js",
+    "name": "sales-assistant-embed",
+    "src": "resources/js/sales-assistant-embed.js",
+    "isEntry": true
+  },
+  "resources/js/sales-assistant.js": {
+    "file": "assets/sales-assistant-DLsobr9r.js",
+    "name": "sales-assistant",
+    "src": "resources/js/sales-assistant.js",
     "isEntry": true
   },
   "resources/js/scene-reader.js": {

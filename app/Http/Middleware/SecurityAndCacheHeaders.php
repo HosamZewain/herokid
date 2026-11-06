@@ -105,6 +105,7 @@ class SecurityAndCacheHeaders
     {
         return $request->routeIs([
             'admin.*',
+            'sales.*',
             'order-process.identity-*',
             'app.metrics.*',
             'app.store',

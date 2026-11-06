@@ -1,0 +1,21 @@
+[Unit]
+Description=HeroKid storefront sales assistant (one bounded worker)
+After=network.target mariadb.service mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/herokid
+ExecStart=/usr/bin/php artisan queue:work storefront-assistant --queue=storefront-assistant --sleep=1 --tries=1 --timeout=75 --memory=192 --max-time=3600
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=90
+Nice=10
+MemoryMax=256M
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

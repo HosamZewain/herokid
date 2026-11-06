@@ -119,6 +119,9 @@
                             </div>
                         @endguest
 
+                        @if(request()->attributes->get('sales_assistant_embed'))
+                            <a href="{{ route('sales.cart-edit',['_sales_assistant_embed'=>1]) }}" class="mb-4 block rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-center font-bold text-indigo-700">تعديل بيانات الأطفال والصور مع الاحتفاظ بالسلة</a>
+                        @endif
                         <form action="{{ route('checkout.store') }}" method="POST" class="space-y-4" data-checkout-form
                             data-checkout-draft-scope="{{ $checkoutDraftScope }}"
                             data-checkout-draft-old-fields="{{ json_encode(array_keys(session()->getOldInput())) }}">
@@ -281,7 +284,7 @@
                             @include('front.cart._existing-order-choice')
                             <button type="submit"
                                 class="w-full rounded-2xl bg-indigo-600 py-4 text-base font-black text-white shadow-lg shadow-indigo-100 transition hover:-translate-y-0.5 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-200">
-                                إتمام الطلب
+                                {{ request()->attributes->get('sales_assistant_embed') ? 'مراجعة الطلب قبل التأكيد' : 'إتمام الطلب' }}
                             </button>
                             <p class="text-center text-xs font-bold leading-5 text-slate-950">
                                 سيتواصل فريقنا معك على الواتساب للمعاينة قبل الطباعة وتأكيد الطلب

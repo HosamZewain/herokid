@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsureAgentApiAccess;
 use App\Http\Middleware\IsAdmin;
 use App\Http\Middleware\LogAdminActivity;
 use App\Http\Middleware\RequireAdminPermission;
+use App\Http\Middleware\SalesEmbed;
 use App\Http\Middleware\SecurityAndCacheHeaders;
 use App\Http\Middleware\StudioSessionBoundary;
 use App\Http\Middleware\TrackCustomerVisit;
@@ -40,6 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ],
             append: [
                 TrackCustomerVisit::class,
+                SalesEmbed::class,
             ],
         );
 
