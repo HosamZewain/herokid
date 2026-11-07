@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 
 class SalesCatalog
 {
-    public const CACHE_KEY = 'sales-assistant:public-catalog:v2';
+    public const CACHE_KEY = 'sales-assistant:public-catalog:v3';
 
     public function all(): array
     {
@@ -27,7 +27,7 @@ class SalesCatalog
                 $items[$key] = ['key' => $key, 'kind' => 'story', 'id' => $s->id,
                     'title' => CustomerKnowledge::text($s->title, 150), 'description' => CustomerKnowledge::text($s->short_desc, 500),
                     'value' => CustomerKnowledge::text($s->lesson_value, 250), 'age' => $s->age_range,
-                    'gender' => $s->gender ?: 'both', 'language' => $s->language ?: 'ar',
+                    'gender' => 'both', 'language' => $s->language ?: 'ar',
                     'languages' => app(StoryLanguageAvailability::class)->english($s) ? ['ar', 'en'] : ['ar'],
                     'categories' => $s->categories->pluck('name')->all(), 'keywords' => $profiles[$key] ?? '',
                     'price_cents' => (int) round($pricing['effective_price'] * 100),

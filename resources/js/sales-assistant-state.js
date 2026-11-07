@@ -3,7 +3,7 @@ export function shouldPoll({ open, hidden, pending, working }) {
 }
 export function trustedFrameMessage(event, frame, origin) {
     return event.origin === origin && event.source === frame.contentWindow && event.data?.channel === 'herokid-sales'
-        && ['personalization', 'cart', 'review', 'complete', 'added'].includes(event.data.stage);
+        && ['personalization', 'cart', 'review', 'complete', 'added', 'question', 'resize'].includes(event.data.stage);
 }
 export function publicUrl(value, origin, image = false) {
     try {

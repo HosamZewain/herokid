@@ -54,9 +54,9 @@ class SalesAssistantSemanticCatalogTest extends TestCase
             $input = $request->data()['input'][0]['content'];
             $data = json_decode($input, true);
             $keys = array_column($data['catalog_candidates'], 'key');
-            $this->assertCount(19, $keys);
+            $this->assertCount(20, $keys);
             $this->assertContains('story:'.$adventure->id, $keys);
-            $this->assertNotContains('story:'.$boy->id, $keys);
+            $this->assertContains('story:'.$boy->id, $keys);
             $this->assertNotContains('story:'.$inactive->id, $keys);
             $this->assertTrue($data['catalog_scope']['complete']);
             $this->assertLessThanOrEqual(32000, strlen($input));
@@ -121,7 +121,7 @@ class SalesAssistantSemanticCatalogTest extends TestCase
             Order::withoutEvents(fn () => Order::create(['order_number' => 'SYN-'.Str::uuid(), 'story_id' => $story->id, 'child_name' => 'Synthetic private customer', 'child_age' => 6, 'child_gender' => 'girl', 'status' => 'new_confirmed', 'payment_status' => 'unpaid']));
         }
         $ranking = app(SalesCatalogContext::class)->popularStories(['age' => 6, 'gender' => 'girl']);
-        $this->assertSame(['story:'.$first->id, 'story:'.$second->id], $ranking);
+        $this->assertSame(['story:'.$boy->id, 'story:'.$first->id, 'story:'.$second->id], $ranking);
         $this->assertStringNotContainsString('Synthetic private customer', json_encode($ranking));
         $turn = app(SalesBudget::class)->reserve($this->salesConversation(), 'الأكثر طلبًا', (string) Str::uuid());
         Http::fake(['*' => Http::response($this->salesReply([['key' => 'story:'.$first->id, 'reason' => 'من الأكثر طلبًا.']], basis: 'popularity'))]);

@@ -56,7 +56,7 @@ class SalesSessions
     {
         return collect(app(PackageCartExpander::class)->expand($request->session()->get('cart.items', [])))->flatMap(fn ($i) => [
             $i['child_name'] ?? null, $i['parent_name'] ?? null, $i['school_name'] ?? null,
-        ])->filter()->values()->all();
+        ])->merge(array_values(array_intersect_key(app(SalesIntake::class)->read($request), array_flip(['child_name', 'parent_name', 'phone', 'street']))))->filter()->values()->all();
     }
 
     public function turns(SalesConversation $conversation): array

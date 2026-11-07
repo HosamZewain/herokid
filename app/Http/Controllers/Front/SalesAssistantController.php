@@ -15,6 +15,7 @@ use App\Services\SalesAssistant\SalesCart;
 use App\Services\SalesAssistant\SalesCartEditor;
 use App\Services\SalesAssistant\SalesCatalog;
 use App\Services\SalesAssistant\SalesChildContext;
+use App\Services\SalesAssistant\SalesIntake;
 use App\Services\SalesAssistant\SalesPrivacy;
 use App\Services\SalesAssistant\SalesSessions;
 use App\Services\SalesAssistant\SalesSettings;
@@ -48,15 +49,14 @@ class SalesAssistantController extends Controller
         }
 
         return response()->json(['conversation' => $conversation->id, 'turns' => $sessions->turns($conversation), 'cart' => $cart->summary($request),
-            'upsell_declined' => $conversation->upsell_declined, 'chat_available' => app(SalesSettings::class)->verified() && app(SalesSettings::class)->workerReady()])->header('Cache-Control', 'private, no-store');
+            'private_details' => app(SalesIntake::class)->read($request), 'upsell_declined' => $conversation->upsell_declined, 'chat_available' => app(SalesSettings::class)->verified() && app(SalesSettings::class)->workerReady()])->header('Cache-Control', 'private, no-store');
     }
 
     public function message(Request $request, SalesSessions $sessions, SalesBudget $budget, SalesPrivacy $privacy, SalesCart $cart)
     {
         $this->check();
-        abort_unless(app(SalesSettings::class)->verified() && app(SalesSettings::class)->workerReady(), 503, 'المحادثة الذكية غير متاحة الآن؛ تقدر تختار وتكمل الطلب من النماذج.');
-        $input = $request->validate(['message' => 'required|string|max:1500', 'client_nonce' => 'required|uuid']);
-        abort_if(array_diff(array_keys($request->except('_token')), ['message', 'client_nonce']), 422);
+        $input = $request->validate(['message' => 'required|string|max:1500', 'client_nonce' => 'required|uuid', 'private_step' => 'nullable|in:'.implode(',', SalesIntake::FIELDS)]);
+        abort_if(array_diff(array_keys($request->except('_token')), ['message', 'client_nonce', 'private_step']), 422);
         $conversation = $sessions->own($request);
         // Idempotent retransmission gets its existing receipt without paying again.
         $existing = SalesTurn::where('conversation_id', $conversation->id)->where('client_nonce', $input['client_nonce'])->first();
@@ -69,12 +69,31 @@ class SalesAssistantController extends Controller
             abort(429, 'استنى دقيقة قبل رسائل جديدة.');
         }
         RateLimiter::hit($rate, 60);
+        $capture = app(SalesIntake::class)->extract($input['message'], $input['private_step'] ?? null);
+        $safeCaptured = $privacy->redact($input['message'], array_values(array_intersect_key($capture['fields'], array_flip(['child_name', 'parent_name', 'phone', 'street']))));
+        $mixedRequest = $capture['handled'] && ! $capture['ambiguous'] && preg_match('/(?:قصة|قصه|حكاية|حكايه|باقة|باقه|منتج|نشاط|اشتري|أشتري|ترشح|رشح|بتنصح|بدور)/u', $safeCaptured);
+        $intakeFacts = [];
+        if ($mixedRequest) {
+            $intakeFacts = app(SalesIntake::class)->remember($request, $conversation, $capture);
+        }
+        if ($capture['handled'] && ! $mixedRequest) {
+            $turn = app(SalesIntake::class)->receive($request, $conversation, $input['client_nonce'], $capture);
+
+            return response()->json(['turn_id' => $turn->id, 'status' => $turn->status], 202)->header('Cache-Control', 'private, no-store');
+        }
+        abort_unless(app(SalesSettings::class)->verified() && app(SalesSettings::class)->workerReady(), 503, 'المحادثة الذكية غير متاحة الآن؛ تقدر تكمل بياناتك وطلبك هنا.');
         $text = $privacy->redact($input['message'], $sessions->knownPrivate($request), array_column(app(SalesCatalog::class)->all(), 'title'));
+        if ($mixedRequest) {
+            $text .= (isset($capture['fields']['child_name']) ? ' طفل جديد.' : '').(isset($intakeFacts['child_age']) ? ' عمر الطفل '.$intakeFacts['child_age'].' سنوات.' : '').(isset($intakeFacts['child_gender']) ? ($intakeFacts['child_gender'] === 'girl' ? ' بنت.' : ' ولد.') : '');
+        }
         try {
             $turn = $budget->reserve($conversation, $text, $input['client_nonce']);
         } catch (ValidationException $e) {
             $sessions->event($conversation, 'message_rejected');
             throw $e;
+        }
+        if ($mixedRequest) {
+            $sessions->event($conversation, 'intake_received', metrics: ['private_intake' => true, 'field_count' => count($capture['fields'])], turnId: $turn->id);
         }
         try {
             AnswerSalesAssistant::dispatch($turn->id, $cart->summary($request));

@@ -79,7 +79,7 @@
             <form action="{{ route('cart.products.store', $product) }}" method="POST" data-product-order-form>
                 @csrf
                 <section class="grid items-start gap-5 lg:grid-cols-[minmax(0,1.08fr)_minmax(380px,0.92fr)] lg:gap-8">
-                    <div class="min-w-0 space-y-3 lg:sticky lg:top-32">
+                    <div class="min-w-0 space-y-3 lg:sticky lg:top-32" data-product-presentation>
                         <div class="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm sm:rounded-3xl">
                             @if($initialDisplayImage)
                                 <x-public-image :src="$initialDisplayImage" :alt="$product->name_ar" :preferred-width="960" sizes="(min-width: 1024px) 50vw, 100vw" width="900" height="675"

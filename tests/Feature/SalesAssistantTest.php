@@ -56,7 +56,7 @@ class SalesAssistantTest extends TestCase
         $turn = SalesTurn::sole();
         $this->assertStringNotContainsString('01012345678', $turn->request_text);
         $this->assertStringNotContainsString('سري للغاية', $turn->request_text);
-        $this->assertDatabaseCount('sales_assistant_events', 2);
+        $this->assertDatabaseCount('sales_assistant_events', 3);
         Http::assertNothingSent();
     }
 

@@ -82,7 +82,7 @@ class SalesAssistantConversationQualityTest extends TestCase
         $this->assertSame('boy', $context->fromMessages(['بنتي ٦ سنين', 'ابني ولد مش بنت'])['gender']);
     }
 
-    public function test_provider_seeds_and_final_cards_enforce_existing_age_and_gender_and_removes_the_wrong_title_from_prose(): void
+    public function test_all_stories_customize_for_either_gender_while_actual_child_age_is_preserved(): void
     {
         $this->salesEnabled();
         $girl = $this->salesStory('girl-prayer', 'نور الصلاة', 'حب الصلاة', '٦ - ٩ سنوات');
@@ -100,14 +100,14 @@ class SalesAssistantConversationQualityTest extends TestCase
             ['key' => 'story:'.$older->id, 'reason' => 'عن الصلاة'],
         ], 'أرشح صلاة الفجر مع بابا. كام سنة عمرها؟'))]);
         $reply = app(SalesProvider::class)->answer($turn, []);
-        Http::assertSent(function ($request) use ($girl) {
+        Http::assertSent(function ($request) use ($girl, $boy) {
             $data = json_decode($request->data()['input'][0]['content'], true);
             $this->assertSame(['age' => 6, 'gender' => 'girl', 'needs_child_choice' => false], $data['child_context']);
-            $this->assertSame(['story:'.$girl->id], array_column($data['catalog_candidates'], 'key'));
+            $this->assertSame(['story:'.$girl->id, 'story:'.$boy->id], array_column($data['catalog_candidates'], 'key'));
 
             return true;
         });
-        $this->assertSame(['story:'.$girl->id], array_column($reply['result']['recommendations'], 'key'));
+        $this->assertSame(['story:'.$boy->id, 'story:'.$girl->id], array_column($reply['result']['recommendations'], 'key'));
         $this->assertStringNotContainsString('صلاة الفجر مع بابا', $reply['result']['message']);
         $this->assertStringNotContainsString('كام', $reply['result']['message']);
         $this->assertStringContainsString('لبنتك', $reply['result']['message']);
@@ -145,11 +145,11 @@ class SalesAssistantConversationQualityTest extends TestCase
         $this->get('/')->assertOk()->assertSee('data-open', false)->assertSee('data-close', false)->assertDontSee('خصوصية المحادثة');
     }
 
-    public function test_no_suitable_story_does_not_fall_back_to_unrelated_stories_or_a_boys_story(): void
+    public function test_no_age_appropriate_story_does_not_fall_back_to_an_older_story(): void
     {
         $this->salesEnabled();
         $boy = $this->salesStory('boy-prayer', 'موعد النور', 'حب الصلاة');
-        $boy->update(['gender' => 'boy']);
+        $boy->update(['gender' => 'boy', 'age_range' => '12-15']);
         $girl = $this->salesStory('girl-other', 'طبيبة الحيوانات', 'الرحمة');
         $girl->update(['gender' => 'girl', 'short_desc' => 'قصة عن الحيوانات']);
         $c = $this->salesConversation();
@@ -170,7 +170,7 @@ class SalesAssistantConversationQualityTest extends TestCase
         $girl = $this->salesStory('girl-prayer', 'نور الصلاة', 'حب الصلاة', '٦ - ٩ سنوات');
         $girl->update(['gender' => 'girl']);
         $boy = $this->salesStory('boy-prayer', 'صلاة الفجر مع بابا', 'حب الصلاة');
-        $boy->update(['gender' => 'boy']);
+        $boy->update(['gender' => 'boy', 'age_range' => '12-15']);
         $c = $this->salesConversation();
         $this->remember($c, 'بنتي 6 سنين');
         $turn = app(SalesBudget::class)->reserve($c, 'الصلاة', (string) Str::uuid());
@@ -196,7 +196,7 @@ class SalesAssistantConversationQualityTest extends TestCase
         $girl = $this->salesStory('girl-prayer', 'نور الصلاة', 'حب الصلاة');
         $girl->update(['gender' => 'girl']);
         $boy = $this->salesStory('boy-prayer', 'موعد النور', 'حب الصلاة');
-        $boy->update(['gender' => 'boy']);
+        $boy->update(['gender' => 'boy', 'age_range' => '12-15']);
         $this->openSales();
         $this->remember(SalesConversation::sole(), 'بنتي 6 سنين');
         $this->postJson(route('sales.catalog'), ['query' => 'الصلاة', 'age' => 12, 'gender' => 'boy'])

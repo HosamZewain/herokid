@@ -207,7 +207,7 @@ class CartController extends Controller
             'story_title' => $story->title,
         ];
 
-        if ($request->input('next') === 'cart') {
+        if ($request->attributes->get('sales_assistant_embed') || $request->input('next') === 'cart') {
             return redirect()
                 ->route('cart.index')
                 ->with('cart_added_notice', $cartNotice);

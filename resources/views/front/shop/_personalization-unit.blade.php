@@ -2,7 +2,7 @@
     $unitOld = old("personalizations.$unitIndex", []);
     $unitConfig = $hasPhotoField ? array_merge($photoUploadConfig, [
         'batchToken' => \Illuminate\Support\Str::random(48),
-        'storageKey' => 'herokid:product:'.$product->slug.':unit:'.$unitIndex.':photo-upload-ids',
+        'storageKey' => 'herokid:product:'.$product->slug.':unit:'.$unitIndex.':photo-upload-ids'.(request()->attributes->get('sales_intake_key') ? ':sales:'.request()->attributes->get('sales_intake_key') : ''),
         'hiddenInputName' => "personalizations[$unitIndex][photo_upload_ids][]",
         'serverRejectedUploads' => $errors->has("personalizations.$unitIndex.photo_upload_ids") || $errors->has("personalizations.$unitIndex.photo_upload_ids.*"),
         'restoredUploadIds' => $errors->has("personalizations.$unitIndex.photo_upload_ids") ? [] : ($unitOld['photo_upload_ids'] ?? []),

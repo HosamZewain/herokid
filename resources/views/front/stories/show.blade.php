@@ -249,7 +249,7 @@
                             </div>
                         @endif
 
-                        <form id="story-order-form" action="{{ route('cart.store', $story->slug) }}" method="POST" novalidate data-story-order-form data-story-draft-key="herokid:story:{{ $story->slug }}:draft">
+                        <form id="story-order-form" action="{{ route('cart.store', $story->slug) }}" method="POST" novalidate data-sales-min-photos="{{ $photoUploadConfig['minFiles'] ?? 2 }}" data-story-order-form data-story-draft-key="herokid:story:{{ $story->slug }}:draft{{ request()->attributes->get('sales_intake_key') ? ':sales:'.request()->attributes->get('sales_intake_key') : '' }}">
                             @csrf
                             <input type="hidden" name="upload_session_token" value="{{ $photoUploadConfig['sessionToken'] ?? '' }}">
 
@@ -525,7 +525,7 @@
                 const concurrency = Math.max(1, Number(config.concurrency || 2));
                 const maxLongEdge = Number(config.maxLongEdge || 2560);
                 const jpegQuality = Math.min(1, Math.max(0.5, Number(config.jpegQuality || 90) / 100));
-                const storageKey = `herokid:story:${@json($story->slug)}:photo-upload-ids`;
+                const storageKey = `herokid:story:${@json($story->slug)}:photo-upload-ids${@json(request()->attributes->get('sales_intake_key') ? ':sales:'.request()->attributes->get('sales_intake_key') : '')}`;
                 const draftKey = form.dataset.storyDraftKey;
                 const serverRejectedStoredUploads = @json($errors->has('photo_upload_ids') || $errors->has('photo_upload_ids.*'));
                 const items = [];
@@ -861,6 +861,11 @@
                         form.reportValidity();
                         return;
                     }
+                    // Disabled submit buttons are omitted from native form serialization.
+                    // Preserve the actual intent before locking both buttons.
+                    const intent = document.createElement('input');
+                    intent.type = 'hidden'; intent.name = 'next'; intent.value = event.submitter?.value || 'cart';
+                    form.append(intent);
                     submitLocked = true;
                     if (draftKey) sessionStorage.removeItem(draftKey);
                     updateSubmitState();

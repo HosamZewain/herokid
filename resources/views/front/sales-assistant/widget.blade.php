@@ -20,7 +20,7 @@
     <section id="hk-sales-panel" class="hk-sales-panel" data-panel @unless($full) hidden role="dialog" aria-modal="true" @endunless aria-labelledby="hk-sales-title">
         <header class="hk-sales-header">
             <div class="hk-sales-avatar" aria-hidden="true">✦</div>
-            <div class="hk-sales-heading"><h{{ $full ? '1':'2' }} id="hk-sales-title">مساعد HeroKid</h{{ $full ? '1':'2' }}><p>مساعد ذكي لاختيار حكاية ونشاط لطفلك</p></div>
+            <div class="hk-sales-heading"><h{{ $full ? '1':'2' }} id="hk-sales-title">مساعد HeroKid</h{{ $full ? '1':'2' }}><p>نختار ونخصّص ونكمّل طلبك هنا</p></div>
             <div class="hk-sales-header-actions">
                 @unless($full)<a href="{{ route('sales.index') }}" title="فتح في صفحة كاملة" aria-label="فتح في صفحة كاملة">⤢</a><button type="button" data-close aria-label="إغلاق المساعد">×</button>@endunless
             </div>
@@ -28,25 +28,27 @@
         <nav class="hk-sales-steps" aria-label="خطوات الطلب"><ol>
             @foreach(['اختيار','بيانات وصور','عنوان','مراجعة وتأكيد'] as $step)<li data-step="{{ $loop->index }}" @if($loop->first) aria-current="step" @endif><span>{{ $loop->iteration }}</span>{{ $step }}</li>@endforeach
         </ol></nav>
-        <div class="hk-sales-workspace" data-workspace hidden>
-            <div class="hk-sales-workbar"><button type="button" data-chat>→ رجوع للمحادثة</button><span data-frame-status>بيانات المنتج والصور</span><button type="button" data-reload-frame>تحديث</button></div>
-            <iframe data-purchase-frame title="بيانات المنتج والسلة وإتمام الطلب" referrerpolicy="same-origin"></iframe>
-        </div>
         <div class="hk-sales-chat" data-chat-view>
             <div class="hk-sales-messages" data-messages role="log" aria-live="polite" aria-relevant="additions" tabindex="0" aria-label="المحادثة">
                 <div class="hk-sales-welcome">
                     <span class="hk-sales-eyebrow">حكاية على مقاس طفلك ✦</span><h2>نلاقي حاجة يحبها،<br>وتضيف له كمان.</h2>
                     <p>أنا مساعد HeroKid الذكي. بتدور على قصة عن موضوع معين، ولا نشاط يناسب طفلك؟</p>
                     <div class="hk-sales-chips">@foreach(['قصة تحببه في الصلاة','بيحب كرة القدم','قصة عن بر الوالدين','نشاط بعيد عن الشاشات'] as $topic)<button type="button" data-topic="{{ $topic }}">{{ $topic }}</button>@endforeach</div>
-                    <p class="hk-sales-soft-note">قولي عمره واهتمامه لو حابب. الاسم والصور وبيانات التواصل مكانهم النماذج الخاصة.</p>
+                    <p class="hk-sales-soft-note">قولي عمره واهتمامه لو حابب. نكمّل البيانات والصور والطلب هنا خطوة بخطوة.</p>
                 </div>
                 <div data-thread></div>
                 <div data-browser-results></div>
                 <div data-upsells hidden></div>
+                <section class="hk-sales-private-draft" data-private-draft hidden aria-label="مراجعة البيانات الخاصة"></section>
+        <div class="hk-sales-workspace" data-workspace hidden>
+            <div class="hk-sales-workbar"><button type="button" data-chat>إضافة اختيار آخر</button><span data-frame-status>بيانات المنتج والصور</span><button type="button" data-reload-frame>تحديث</button></div>
+            <iframe data-purchase-frame title="بيانات المنتج والسلة وإتمام الطلب" referrerpolicy="same-origin"></iframe>
+        </div>
+
             </div>
             <p class="hk-sales-notice" data-notice role="status" hidden></p>
             <form class="hk-sales-composer" data-compose>
-                <label class="hk-sales-sr" for="hk-sales-message">رسالتك للمساعد، بدون بيانات شخصية</label>
+                <label class="hk-sales-sr" for="hk-sales-message">رسالتك للمساعد</label>
                 <textarea id="hk-sales-message" name="message" rows="1" maxlength="1500" placeholder="مثلاً: ابني ٦ سنين وبيحب المغامرات…" required></textarea>
                 <button type="submit" data-send aria-label="إرسال الرسالة">↑</button>
             </form>

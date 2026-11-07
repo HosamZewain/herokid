@@ -22,7 +22,8 @@ if (root) {
     }
 
     let open = root.dataset.full === '1', state = null, timer = null, polling = false, busy = false, previousSignature = '', nonce = null, lastText = null;
-    let refreshPromise = null;
+    let refreshQueued = false;
+    let refreshPromise = null, privateStep = null, privateSignature = '', approvedContact = {};
     let abortPoll = null, upsellKey = '', returnFocus = null, interest = '', restoredFrame = false;
     const element = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text) e.textContent = text; return e; };
     const notice = (message = '') => { q('[data-notice]').textContent = message; q('[data-notice]').hidden = !message; };
@@ -47,7 +48,7 @@ if (root) {
         if (shouldPoll({ open, hidden: document.hidden, pending: pending(), working: polling })) timer = setTimeout(() => refresh(), 4000);
     }
     function refresh() {
-        if (refreshPromise) return refreshPromise;
+        if (refreshPromise) {refreshQueued=true;return refreshPromise;}
         if (!open || document.hidden) return Promise.resolve();
         polling = true; abortPoll = new AbortController();
         refreshPromise = (async () => {
@@ -55,11 +56,11 @@ if (root) {
                 const next = await api(root.dataset.state, {}, abortPoll.signal);
                 const changedConversation = state && state.conversation !== next.conversation;
                 state = next;
-                if (changedConversation) { frame.removeAttribute('src'); q('[data-workspace]').hidden = true; q('[data-chat-view]').hidden = false; notice('بدأت جلسة جديدة. راجع السلة والصور قبل التأكيد.'); }
+                if (changedConversation) { privateStep=null;privateSignature='';approvedContact={};frame.removeAttribute('src'); q('[data-workspace]').hidden = true; q('[data-chat-view]').hidden = false; notice('بدأت جلسة جديدة. راجع السلة والصور قبل التأكيد.'); }
                 render();
                 if(!restoredFrame && root.dataset.full==='1') {restoredFrame=true;const saved=storageGet(`hk-sales-frame:${state.conversation}`);if(saved && !saved.includes('/checkout/success'))purchase(saved);}
             } catch (error) { if (error.name !== 'AbortError') notice(error.message); }
-            finally { polling = false; refreshPromise = null; schedulePoll(); }
+            finally { polling = false; refreshPromise = null; if(refreshQueued){refreshQueued=false;queueMicrotask(refresh);}else schedulePoll(); }
         })();
         return refreshPromise;
     }
@@ -78,9 +79,10 @@ if (root) {
                 if (complete && turn.result?.cards?.length) thread.append(cards(turn.result.cards));
             }
             previousSignature = signature;
-            requestAnimationFrame(() => q('[data-messages]').scrollTo({top:q('[data-messages]').scrollHeight,behavior:'instant'}));
+            requestAnimationFrame(() => thread.lastElementChild?.scrollIntoView({block:'start',behavior:'instant'}));
         }
         if (!state.chat_available) notice('الردود الذكية مش متاحة حاليًا؛ البحث والاختيار والسلة شغالين.');
+        renderPrivateDetails();
         if (state.upsell_declined) q('[data-upsells]').hidden = true;
     }
     function cards(items) {
@@ -102,7 +104,7 @@ if (root) {
             if (item.requires_story) body.append(element('p','hk-sales-card-meta','يحتاج قصة مرتبطة في السلة'));
             const actions = element('div','hk-sales-card-actions');
             const choose = element('button','','اختيار وتخصيص'); choose.type = 'button';
-            choose.addEventListener('click', () => purchase(`${root.dataset.itemBase}/${item.kind}/${item.id}?_sales_assistant_embed=1`,1));
+            choose.addEventListener('click', () => purchase(`${root.dataset.itemBase}/${item.kind}/${item.id}?_sales_assistant_embed=1&_sales_entry=${newClientNonce()}`,1));
             actions.append(choose);
             const url = publicUrl(item.url,location.origin);
             if (url) { const preview = element('a','','معاينة التفاصيل ↗'); preview.href = url; preview.target = '_blank'; preview.rel = 'noopener noreferrer'; preview.addEventListener('click',()=>api(root.dataset.event,{type:'preview',key:item.key}).catch(()=>{})); actions.append(preview); }
@@ -112,19 +114,24 @@ if (root) {
     }
     function step(number) { root.querySelectorAll('[data-step]').forEach((e,i)=> { if(i===number)e.setAttribute('aria-current','step');else e.removeAttribute('aria-current'); }); }
     function purchase(url, stage = 2) {
-        const safe = publicUrl(url,location.origin); if(!safe) return;
-        q('[data-workspace]').hidden = false; q('[data-chat-view]').hidden = true; step(stage);
+        let safe = publicUrl(url,location.origin); if(!safe) return;
+        const destination=new URL(safe);
+        if(destination.pathname.startsWith('/shopping-assistant/item/') && !destination.searchParams.has('_sales_entry')){destination.searchParams.set('_sales_entry',newClientNonce());safe=destination.href;}
+        if(!/^\/(?:shopping-assistant\/(?:item\/(?:story|product|package)\/[1-9][0-9]*|cart-edit)|cart|checkout\/success|stories\/[^/]+|shop\/(?:product|package)\/[^/]+)$/.test(destination.pathname))safe=root.dataset.cart;
+        q('[data-workspace]').hidden = false; q('[data-chat-view]').hidden = false; privateStep=null;step(stage);
+        q('[data-workspace]').scrollIntoView({block:'start',behavior:'instant'});
         if(state)storageSet(`hk-sales-frame:${state.conversation}`,safe);
         if(frame.src!==safe) frame.src=safe;
-        frame.focus();
+        q('[data-frame-status]').textContent='بنجهّز الخطوة التالية…';
     }
-    q('[data-chat]').addEventListener('click',()=> { q('[data-workspace]').hidden=true;q('[data-chat-view]').hidden=false;step(0);input.focus();refresh(); });
+    q('[data-chat]').addEventListener('click',()=> { q('[data-workspace]').hidden=true;q('[data-chat-view]').hidden=false;privateStep=null;if(state)storageSet(`hk-sales-frame:${state.conversation}`,'');step(0);input.focus();refresh(); });
     q('[data-reload-frame]').addEventListener('click',()=> { if(frame.src) frame.contentWindow.location.reload(); });
     q('[data-cart-button]').addEventListener('click',()=>purchase(root.dataset.cart));
     frame.addEventListener('load',()=> {
         try {
             const doc = frame.contentDocument;
             if(state && frame.contentWindow.location.origin===location.origin)storageSet(`hk-sales-frame:${state.conversation}`,frame.contentWindow.location.href);
+            if(frame.contentWindow.location.pathname==='/cart' && typeof frame.contentWindow.applySalesDetails==='function')frame.contentWindow.applySalesDetails(approvedContact);
             const stage = doc.querySelector('[data-sales-review]') ? 3 : frame.contentWindow.location.pathname === '/checkout/success' ? 3 : frame.contentWindow.location.pathname === '/cart' ? 2 : 1;
             step(stage); q('[data-frame-status]').textContent=['اختيار','بيانات المنتج والصور','السلة وعنوان الاستلام','مراجعة وتأكيد'][stage];
         } catch { notice('افتح السلة من الرابط العادي لاستكمال الطلب.'); }
@@ -132,9 +139,44 @@ if (root) {
     window.addEventListener('message',event=> {
         if (!trustedFrameMessage(event,frame,location.origin)) return;
         if(['cart','added','complete'].includes(event.data.stage)) refresh();
-        if(event.data.stage==='added') offerUpsells();
+        if(event.data.stage==='question') {
+            privateStep=['child_name','child_age','child_gender','parent_name','phone','street'].includes(event.data.field)?event.data.field:null;
+            q('[data-workspace]').scrollIntoView({block:'nearest',behavior:'instant'});
+        }
+        if(event.data.stage==='resize' && Number.isFinite(event.data.height)) frame.style.height=`${Math.max(180,Math.min(2400,event.data.height))}px`;
+        if(event.data.stage==='added') {privateStep=null;notice('اتضاف اختيارك. نكمّل بيانات التوصيل هنا، أو اختار «إضافة اختيار آخر».');offerUpsells();}
+
         if(event.data.stage==='complete') { notice('طلبك اتسجل. رقم الطلب وحالته ظاهرين في صفحة التأكيد.'); if(state)storageSet(`hk-sales-frame:${state.conversation}`,''); }
     });
+    function renderPrivateDetails() {
+        const draft=state?.private_details || {}, signature=JSON.stringify(draft);
+        if(signature===privateSignature)return; privateSignature=signature;
+        const box=q('[data-private-draft]');box.replaceChildren();box.hidden=!Object.keys(draft).length;
+        if(box.hidden)return;
+        box.append(element('h3','','راجع البيانات اللي فهمتها'));
+        box.append(element('p','hk-sales-card-meta','مسودة خاصة. استخدامها للطفل الحالي باختيارك، والطلب هيتسجل بعد المراجعة والتأكيد.'));
+        const names={child_name:'اسم الطفل',child_age:'عمر الطفل',child_gender:'نوع الطفل',parent_name:'اسم ولي الأمر',phone:'رقم الهاتف',street:'الشارع ورقم العقار'};
+        const controls={};
+        for(const [key,value] of Object.entries(draft)) {
+            if(!names[key])continue;
+            const label=element('label','',names[key]),control=element(key==='child_gender'?'select':'input');
+            if(key==='child_gender'){for(const [v,t] of [['boy','ولد'],['girl','بنت']]){const option=element('option','',t);option.value=v;control.append(option);}}
+            else control.type=key==='phone'?'tel':key==='child_age'?'number':'text';
+            control.value=String(value);control.dataset.privateField=key;if(key==='phone')control.dir='ltr';label.append(control);controls[key]=control;box.append(label);
+        }
+        const apply=element('button','','استخدم البيانات دي في الخطوة الحالية');apply.type='button';
+        apply.addEventListener('click',()=> {
+            try {
+                if(q('[data-workspace]').hidden || typeof frame.contentWindow.applySalesDetails!=='function'){notice('اختار القصة أو المنتج الأول، وبعدها استخدم البيانات هنا.');return;}
+                const values=Object.fromEntries(Object.entries(controls).map(([k,c])=>[k,c.value]));
+                approvedContact=Object.fromEntries(Object.entries(values).filter(([key])=>['parent_name','phone','street'].includes(key)));
+                const count=frame.contentWindow.applySalesDetails(values);
+                notice(count?'تم ملء الخانات الناقصة. راجعها وكمّل الصور وباقي البيانات.':'الخانات دي مليانة بالفعل أو تخص خطوة تانية. تقدر تعدّلها مباشرة في الخطوة الظاهرة.');
+                q('[data-workspace]').scrollIntoView({block:'start',behavior:'instant'});
+            }catch{notice('استنى تحميل الخطوة، وبعدها جرّب استخدام البيانات.');}
+        });box.append(apply);
+        requestAnimationFrame(()=>box.scrollIntoView({block:'start',behavior:'instant'}));
+    }
     async function offerUpsells() {
         if(!state || state.upsell_declined) return;
         try {
@@ -158,9 +200,8 @@ if (root) {
         busy=true;q('[data-send]').disabled=true;notice();
         try {
             if(!state) await refresh();
-            if(!state?.chat_available){await browse(text);return;}
             if(text!==lastText || !nonce){nonce=newClientNonce();lastText=text;}
-            await api(root.dataset.message,{message:text,client_nonce:nonce});input.value='';nonce=null;lastText=null;
+            await api(root.dataset.message,{message:text,client_nonce:nonce,...(privateStep?{private_step:privateStep}:{})});input.value='';nonce=null;lastText=null;
             await refresh();
         } catch(error){notice(error.message);await refresh();}
         finally {busy=false;q('[data-send]').disabled=pending();}

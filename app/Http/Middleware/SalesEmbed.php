@@ -6,6 +6,7 @@ use App\Services\SalesAssistant\SalesSessions;
 use App\Services\SalesAssistant\SalesSettings;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class SalesEmbed
 {
@@ -17,6 +18,9 @@ class SalesEmbed
         $embedded = $request->boolean('_sales_assistant_embed') && $request->routeIs(self::ROUTES)
             && app(SalesSettings::class)->enabled() && app(SalesSessions::class)->current($request);
         $request->attributes->set('sales_assistant_embed', (bool) $embedded);
+        if ($embedded && Str::isUuid((string) $request->query('_sales_entry', ''))) {
+            $request->attributes->set('sales_intake_key', $request->query('_sales_entry'));
+        }
         $cartBefore = $embedded ? array_keys($request->session()->get('cart.items', [])) : [];
         $response = $next($request);
         if ($embedded && ($response->isSuccessful() || $response->isRedirection())) {
