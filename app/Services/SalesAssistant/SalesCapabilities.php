@@ -44,13 +44,13 @@ class SalesCapabilities
     {
         abort_unless(in_array($name, self::TOOLS, true), 403);
         $allowed = match ($name) {
-            'search_catalog' => ['query', 'age', 'gender', 'budget_cents', 'language'], 'get_catalog_item','get_purchase_requirements' => ['key'], 'get_store_policies' => ['topic'], default => []
+            'search_catalog' => ['query', 'age', 'gender', 'budget_cents', 'language', 'cursor', 'kind'], 'get_catalog_item','get_purchase_requirements' => ['key'], 'get_store_policies' => ['topic'], default => []
         };
         abort_if(array_diff(array_keys($args), $allowed), 422);
         $rules = match ($name) {
-            'search_catalog' => ['query' => 'required|string|max:500', 'age' => 'nullable|integer|min:0|max:18', 'gender' => 'nullable|in:boy,girl', 'budget_cents' => 'nullable|integer|min:0|max:10000000', 'language' => 'nullable|in:ar,en'],
+            'search_catalog' => ['query' => 'required|string|max:500', 'age' => 'nullable|integer|min:0|max:18', 'gender' => 'nullable|in:boy,girl', 'budget_cents' => 'nullable|integer|min:0|max:10000000', 'language' => 'nullable|in:ar,en', 'cursor' => 'nullable|integer|min:0|max:100000', 'kind' => 'nullable|in:story,product,package'],
             'get_catalog_item', 'get_purchase_requirements' => ['key' => ['required', 'string', 'regex:/^(story|product|package):[1-9][0-9]*$/']],
-            'get_store_policies' => ['topic' => 'required|in:payment,delivery,privacy,photos,preview,tracking,library,identity'],
+            'get_store_policies' => ['topic' => 'required|in:payment,delivery,privacy,photos,preview,tracking,library,identity,offers'],
             default => [],
         };
         $args = Validator::make($args, $rules)->validate();
@@ -62,12 +62,19 @@ class SalesCapabilities
             $context = $turn->getAttribute('child_context') ?? app(SalesChildContext::class)->forTurn($turn);
             $items = [];
             $result = match ($name) {
-                'search_catalog' => ['items' => $catalog->publicFacts($items = array_values(array_filter($catalog->search(mb_substr((string) ($args['query'] ?? ''), 0, 500), $context['age'] ?? $args['age'] ?? null, $context['gender'] ?? $args['gender'] ?? null, isset($args['budget_cents']) ? (int) $args['budget_cents'] : null, $args['language'] ?? null), fn ($item) => $catalog->eligible($item, $context))))],
+                'search_catalog' => app(SalesCatalogContext::class)->overview(
+                    ['age' => $context['age'] ?? $args['age'] ?? null, 'gender' => $context['gender'] ?? $args['gender'] ?? null, 'needs_child_choice' => $context['needs_child_choice'] ?? false],
+                    (int) floor(config('sales_assistant.max_tool_bytes', 12000) / 3), (int) ($args['cursor'] ?? 0), $args['budget_cents'] ?? null, $args['language'] ?? null, $args['kind'] ?? null),
                 'get_catalog_item' => ['item' => $catalog->publicFacts($items = [$catalog->item((string) ($args['key'] ?? ''))])[0]],
                 'get_purchase_requirements' => ['requirements' => $this->requirements(($items = [$catalog->item((string) ($args['key'] ?? ''))])[0])],
-                'get_store_policies' => ['policy' => app(CustomerKnowledge::class)->policy((string) ($args['topic'] ?? ''))],
+                'get_store_policies' => ($args['topic'] ?? '') === 'offers'
+                    ? ['public_offer_keys' => app(SalesCatalogContext::class)->offers($context), 'conditions' => 'Published automatic offers/package savings only; inspect get_catalog_item for current prices. Private coupon codes are not disclosed. Customers can enter their own code in cart; checkout validates eligibility and total.']
+                    : ['policy' => app(CustomerKnowledge::class)->policy((string) ($args['topic'] ?? ''))],
                 'get_my_cart_summary' => ['cart' => $turn->getAttribute('safe_cart_summary') ?? []],
             };
+            if ($name === 'search_catalog') {
+                $items = $result['items'];
+            }
             foreach ($items as $item) {
                 abort_unless($catalog->eligible($item, $context), 422, 'اختار منتجًا مناسبًا لعمر الطفل ونوعه المسجلين في المحادثة.');
             }

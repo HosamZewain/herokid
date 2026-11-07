@@ -15,9 +15,10 @@ abstract class SalesTool extends Tool
     {
         return match ($this->name) {
             'search_catalog' => ['query' => $schema->string()->max(500)->required(), 'age' => $schema->integer()->min(0)->max(18),
-                'gender' => $schema->string()->enum(['boy', 'girl']), 'language' => $schema->string()->enum(['ar', 'en']), 'budget_cents' => $schema->integer()->min(0)->max(10000000)],
+                'gender' => $schema->string()->enum(['boy', 'girl']), 'language' => $schema->string()->enum(['ar', 'en']), 'budget_cents' => $schema->integer()->min(0)->max(10000000),
+                'cursor' => $schema->integer()->min(0)->max(100000), 'kind' => $schema->string()->enum(['story', 'product', 'package'])],
             'get_catalog_item', 'get_purchase_requirements' => ['key' => $schema->string()->max(40)->required()],
-            'get_store_policies' => ['topic' => $schema->string()->enum(['payment', 'delivery', 'privacy', 'photos', 'preview', 'tracking', 'library', 'identity'])->required()],
+            'get_store_policies' => ['topic' => $schema->string()->enum(['payment', 'delivery', 'privacy', 'photos', 'preview', 'tracking', 'library', 'identity', 'offers'])->required()],
             default => [],
         };
     }

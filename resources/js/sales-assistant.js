@@ -93,6 +93,12 @@ if (root) {
             const body = element('div'); body.append(element('h3','',item.title),element('p','hk-sales-card-reason',item.reason),
                 element('p','hk-sales-card-meta', item.age ? `العمر المناسب: ${item.age}` : 'راجع التفاصيل حسب عمر طفلك'),
                 element('p','hk-sales-price',`${new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(item.price_cents/100)} ج.م${item.price_from ? ' (يبدأ من)':''}`));
+            if (item.offer_applied && item.regular_price_cents > item.price_cents) {
+                const regular = element('del','hk-sales-regular-price',`${new Intl.NumberFormat('ar-EG',{maximumFractionDigits:2}).format(item.regular_price_cents/100)} ج.م`);
+                regular.setAttribute('aria-label','السعر قبل العرض');
+                body.insertBefore(regular,body.querySelector('.hk-sales-price'));
+                body.append(element('p','hk-sales-offer',item.offer_label || 'عرض على الاختيار المعروض'));
+            }
             if (item.requires_story) body.append(element('p','hk-sales-card-meta','يحتاج قصة مرتبطة في السلة'));
             const actions = element('div','hk-sales-card-actions');
             const choose = element('button','','اختيار وتخصيص'); choose.type = 'button';

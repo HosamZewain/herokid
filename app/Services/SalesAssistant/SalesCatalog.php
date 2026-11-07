@@ -13,22 +13,25 @@ use Illuminate\Support\Facades\DB;
 
 class SalesCatalog
 {
-    public const CACHE_KEY = 'sales-assistant:public-catalog:v1';
+    public const CACHE_KEY = 'sales-assistant:public-catalog:v2';
 
     public function all(): array
     {
         return Cache::remember(self::CACHE_KEY, 60, function () {
             $profiles = DB::table('sales_catalog_profiles')->pluck('keywords', 'catalog_key');
             $items = [];
+            $storyPricing = app(StoryPricingService::class);
             foreach (Story::where('active', true)->with(['categories:id,name', 'sceneTemplates:id,story_id,scene_number,english_male_text_template,english_female_text_template'])->get() as $s) {
                 $key = 'story:'.$s->id;
+                $pricing = $storyPricing->snapshot($s);
                 $items[$key] = ['key' => $key, 'kind' => 'story', 'id' => $s->id,
                     'title' => CustomerKnowledge::text($s->title, 150), 'description' => CustomerKnowledge::text($s->short_desc, 500),
                     'value' => CustomerKnowledge::text($s->lesson_value, 250), 'age' => $s->age_range,
                     'gender' => $s->gender ?: 'both', 'language' => $s->language ?: 'ar',
                     'languages' => app(StoryLanguageAvailability::class)->english($s) ? ['ar', 'en'] : ['ar'],
                     'categories' => $s->categories->pluck('name')->all(), 'keywords' => $profiles[$key] ?? '',
-                    'price_cents' => (int) round(app(StoryPricingService::class)->effectivePrice($s) * 100),
+                    'price_cents' => (int) round($pricing['effective_price'] * 100),
+                    'regular_price_cents' => (int) round($pricing['regular_price'] * 100), 'offer_applied' => $pricing['offer_applied'], 'offer_label' => $pricing['offer_label'],
                     'image' => $s->cover_url, 'url' => route('stories.show', $s->slug)];
             }
             if (setting('shop_enabled', '1') === '1') {
@@ -45,7 +48,8 @@ class SalesCatalog
                         'categories' => [$p->category?->name_ar], 'keywords' => $profiles[$key] ?? '',
                         'variants' => $p->activeVariants->filter(fn ($v) => $p->hasStock(1, $v))->take(20)->map(fn ($v) => ['id' => $v->id, 'name' => CustomerKnowledge::text($v->name_ar, 80), 'price_cents' => $p->effectivePriceCents($v)])->values()->all(),
                         'price_from' => $p->activeVariants->count() > 1,
-                        'price_cents' => $p->effectivePriceCents($variant), 'image' => $p->featured_image_url,
+                        'price_cents' => $p->effectivePriceCents($variant), 'regular_price_cents' => $p->regularPriceCents($variant),
+                        'offer_applied' => $p->hasActiveSaleForVariant($variant), 'offer_label' => $p->hasActiveSaleForVariant($variant) ? 'عرض على الاختيار المعروض' : null, 'image' => $p->featured_image_url,
                         'url' => route('shop.product.show', $p), 'requires_story' => $p->purchase_mode === 'add_on_only' || $p->personalization_mode === 'inherit_from_linked_story'];
                 }
                 foreach (PricingPackage::where('active', true)->where('show_in_store', true)->with(['items.product.category', 'items.variant'])->get() as $p) {
@@ -53,10 +57,14 @@ class SalesCatalog
                         continue;
                     }
                     $key = 'package:'.$p->id;
+                    $regular = $p->componentPriceCents();
+                    $price = (int) round($p->price * 100);
                     $items[$key] = ['key' => $key, 'kind' => 'package', 'id' => $p->id,
                         'title' => CustomerKnowledge::text($p->name, 150), 'description' => CustomerKnowledge::text($p->description, 500),
                         'value' => '', 'age' => '', 'gender' => 'both', 'language' => 'ar', 'categories' => ['باقات'],
-                        'keywords' => $profiles[$key] ?? '', 'price_cents' => (int) round($p->price * 100),
+                        'keywords' => $profiles[$key] ?? '', 'price_cents' => $price,
+                        'regular_price_cents' => max($regular, $price), 'offer_applied' => $regular > $price,
+                        'offer_label' => $regular > $price ? 'توفير الباقة مقارنة بشراء مكوناتها منفصلة' : null,
                         'image' => null, 'url' => route('shop.package.show', $p)];
                 }
             }
@@ -137,7 +145,7 @@ class SalesCatalog
 
     public function publicFacts(array $items): array
     {
-        return array_map(fn ($i) => array_intersect_key($i, array_flip(['key', 'title', 'description', 'value', 'age', 'gender', 'language', 'price_cents', 'requires_story', 'variants', 'languages', 'price_from'])), $items);
+        return array_map(fn ($i) => array_intersect_key($i, array_flip(['key', 'title', 'description', 'value', 'age', 'gender', 'language', 'price_cents', 'requires_story', 'variants', 'languages', 'price_from', 'regular_price_cents', 'offer_applied', 'offer_label'])), $items);
     }
 
     public function cards(array $choices): array

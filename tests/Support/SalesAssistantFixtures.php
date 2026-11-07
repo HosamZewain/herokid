@@ -37,8 +37,8 @@ trait SalesAssistantFixtures
         return Story::create(['slug' => $slug, 'title' => $title, 'lesson_value' => $value, 'price' => 199, 'language' => 'ar', 'age_range' => $age, 'gender' => 'both', 'active' => true]);
     }
 
-    protected function salesReply(array $recommendations = [], string $message = 'دي اختيارات مناسبة لاهتمام طفلك.', bool $upsell = false): array
+    protected function salesReply(array $recommendations = [], string $message = 'دي اختيارات مناسبة لاهتمام طفلك.', bool $upsell = false, string $basis = 'relevance'): array
     {
-        return ['status' => 'completed', 'usage' => ['input_tokens' => 250, 'output_tokens' => 70], 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['message' => $message, 'recommendations' => $recommendations, 'upsell' => $upsell, 'next' => 'choose'], JSON_UNESCAPED_UNICODE)]]]]];
+        return ['status' => 'completed', 'usage' => ['input_tokens' => 250, 'output_tokens' => 70], 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['basis' => $basis, 'message' => $message, 'recommendations' => $recommendations, 'upsell' => $upsell, 'next' => 'choose'], JSON_UNESCAPED_UNICODE)]]]]];
     }
 }
