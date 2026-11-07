@@ -62,6 +62,10 @@ class OrderDetailsUpdateService
                 ? (int) $validated['_previous_story_id']
                 : (int) $order->story_id;
             $storyChanged = $previousStoryId !== (int) $order->story_id;
+            $editAudit = app(OrderEditAudit::class);
+            $auditOrders = Order::query()->where(fn ($query) => $query->whereKey($order->id)
+                ->orWhere('checkout_group_key', $order->checkoutGroupKey()))->orderBy('id')->lockForUpdate()->get();
+            $beforeFields = $editAudit->snapshot($auditOrders);
             $before = $this->editableValues($order);
             $oldSnapshots = $order->sceneTextSnapshots->keyBy('scene_number');
             $checkoutOrdersUpdated = $this->updateCheckoutContact($order, $validated);
@@ -101,6 +105,8 @@ class OrderDetailsUpdateService
                     'order_number' => $order->order_number,
                     'reason' => $validated['change_reason'],
                     'changes' => $changes,
+                    'field_changes_version' => 1,
+                    'field_changes' => $editAudit->changes($beforeFields, $editAudit->snapshot($auditOrders->fresh(['items', 'story']))),
                     'checkout_orders_updated' => $checkoutOrdersUpdated,
                     'story_item_snapshot_updated' => $order->items->contains('item_type', 'story'),
                     'scene_snapshots_refreshed' => (bool) $order->story,

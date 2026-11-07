@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Cart\ShippingDiscountService;
 use App\Services\Pricing\PackagePricingService;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
@@ -448,6 +449,8 @@ class AdminOrderUpdateService
                 }
 
                 $beforeGroup = $this->groups->present($orders);
+                $editAudit = app(OrderEditAudit::class);
+                $beforeFields = $editAudit->snapshot($orders);
                 $storyInputs = collect($data['stories'] ?? []);
                 $existingStoryOrders = $orders
                     ->filter(fn (Order $order): bool => $this->isStoryOrder($order))
@@ -669,9 +672,12 @@ class AdminOrderUpdateService
                     ->get();
                 $itemsSubtotalCents = (int) $activeOrders->flatMap->items->sum('total_price_cents');
                 $existingGovernorateId = (int) data_get($orders->first()->delivery_details, 'delivery_governorate_id');
-                $deliveryCents = $existingGovernorateId === (int) $governorate->id
+                $shippingPreserved = $existingGovernorateId === (int) $governorate->id;
+                $shippingQuote = $shippingPreserved ? [] : app(ShippingDiscountService::class)
+                    ->quote((int) round(max(0, $governorate->effectiveDeliveryFee()) * 100));
+                $deliveryCents = $shippingPreserved
                     ? (int) round(max(0, (float) data_get($orders->first()->delivery_details, 'delivery_fee', 0)) * 100)
-                    : (int) round(max(0, $governorate->effectiveDeliveryFee()) * 100);
+                    : (int) round($shippingQuote['delivery_fee'] * 100);
                 $discountCents = (int) round(max(0, (float) ($data['discount_amount'] ?? 0)) * 100);
                 $grossCents = $itemsSubtotalCents + $deliveryCents;
 
@@ -709,6 +715,7 @@ class AdminOrderUpdateService
                         'cart_item_index' => $position + 1,
                         'cart_items_count' => $lineCount,
                         'item_price' => ((int) ($storyItem?->total_price_cents ?? $order->items->sum('total_price_cents'))) / 100,
+                        ...$shippingQuote,
                         'subtotal' => $itemsSubtotalCents / 100,
                         'delivery_fee' => $deliveryCents / 100,
                         'discount' => $discountCents / 100,
@@ -776,6 +783,10 @@ class AdminOrderUpdateService
                         'reason' => $data['change_reason'],
                         'before' => $this->auditSnapshot($beforeGroup),
                         'after' => $this->auditSnapshot($afterGroup),
+                        'field_changes_version' => 1,
+                        'field_changes' => $editAudit->changes($beforeFields, $editAudit->snapshot($activeOrders)),
+                        'shipping_calculation' => $shippingPreserved ? 'preserved_existing_fee'
+                            : ($existingGovernorateId > 0 ? 'governorate_changed_current_discount' : 'governorate_selected_current_discount'),
                         'added_order_ids' => $activeOrders->pluck('id')->diff($orders->pluck('id'))->values()->all(),
                         'removed_order_ids' => $removedOrders->keys()->values()->all(),
                         'pruned_empty_order_ids' => $prunedOrderIds,

@@ -17,6 +17,7 @@ use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\AdminOrderQuickEditService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Support\ProductPersonalizationSchema;
+use App\Support\RequestSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -234,6 +235,12 @@ class AdminOrderQuickEditTest extends TestCase
         $this->assertSame($items, OrderItem::get()->toArray());
         $this->assertSame($payments, OrderPaymentEvent::get()->toArray());
         $log = AdminActivityLog::where('action', 'checkout.contact_updated')->firstOrFail();
+        $changes = collect($log->properties['field_changes'])->keyBy('field');
+        foreach ([$this->order, $sibling] as $target) {
+            $this->assertSame('original-district', $changes['orders.'.$target->id.'.delivery.bosta_district_id']['old']);
+            $this->assertSame('nasr', $changes['orders.'.$target->id.'.delivery.bosta_district_id']['new']);
+            $this->assertArrayNotHasKey('orders.'.$target->id.'.delivery.delivery_fee', $changes->all());
+        }
         $this->assertSame('nasr', data_get($log->properties, 'changes.shipping_address.new.bosta_district_id'));
         $this->assertSame('original-district', data_get($log->properties, 'before.'.$this->order->id.'.shipping_address.bosta_district_id'));
     }
@@ -265,7 +272,8 @@ class AdminOrderQuickEditTest extends TestCase
         $limited->permissions()->sync(Permission::whereIn('key', ['orders.view', 'orders.update'])->pluck('id'));
         $limited->unsetRelation('permissions');
         Setting::updateOrCreate(['key' => 'orders_visibility'], ['value' => 'assigned']);
-        $this->getJson(route('admin.orders.groups.address-catalog', $this->order))->assertNotFound();
+        RequestSettings::forget();
+        $this->actingAs($limited->fresh())->getJson(route('admin.orders.groups.address-catalog', $this->order))->assertNotFound();
         $this->patchJson(route('admin.orders.groups.contact', $this->order), ['parent_name' => 'ممنوع', 'change_reason' => 'اختبار نطاق الوصول.'])->assertNotFound();
     }
 
@@ -532,7 +540,12 @@ class AdminOrderQuickEditTest extends TestCase
         $this->assertSame([$path], $this->order->fresh()->uploaded_photos);
         Storage::disk('local')->assertExists($path);
         $this->assertSame(1, $item->personalization_snapshot['fields']['photos']['value']);
-        $this->assertSame([0], AdminActivityLog::where('action', 'order.product_details_updated')->latest('id')->first()->properties['removed_photo_indexes']);
+        $audit = AdminActivityLog::where('action', 'order.product_details_updated')->latest('id')->first()->properties;
+        $this->assertSame([0], $audit['removed_photo_indexes']);
+        $change = collect($audit['field_changes'])->firstWhere('field', 'orders.'.$item->order_id.'.photos');
+        $this->assertSame(hash('sha256', $path), $change['old'][0]['reference']);
+        $this->assertSame(hash('sha256', $item->order->uploaded_photos[0]), $change['new'][0]['reference']);
+        $this->assertNotSame($change['old'], $change['new']);
         $this->updateItem($item, ['removed_photos' => [0], 'photo_revision' => $revision, 'photos' => [UploadedFile::fake()->image('another.jpg')]])->assertConflict();
     }
 

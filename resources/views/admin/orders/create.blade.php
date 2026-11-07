@@ -1,6 +1,7 @@
 <x-admin-layout>
     @php
         $isEditing = isset($editingGroup);
+        $shippingDiscountConfiguration = app(\App\Services\Cart\ShippingDiscountService::class)->configuration();
         $orderForm = $orderForm ?? [];
         $formValue = fn (string $key, mixed $default = null): mixed => old($key, data_get($orderForm, $key, $default));
         $savedProducts = $initialProducts ?? [];
@@ -296,9 +297,9 @@
                                     @foreach($countries as $country)
                                         @foreach($country->activeGovernorates as $governorate)
                                             @php
-                                                $savedDeliveryCents = $isEditing && (string) $formValue('delivery_governorate_id') === (string) $governorate->id
+                                                $savedDeliveryCents = $isEditing && (string) data_get($orderForm, 'delivery_governorate_id') === (string) $governorate->id
                                                     ? (int) $editingGroup['delivery_cents']
-                                                    : (int) round($governorate->effectiveDeliveryFee() * 100);
+                                                    : app(\App\Services\Cart\ShippingDiscountService::class)->feeCents((int) round($governorate->effectiveDeliveryFee() * 100), $shippingDiscountConfiguration);
                                             @endphp
                                             <option value="{{ $governorate->id }}" data-country-id="{{ $country->id }}" data-fee-cents="{{ $savedDeliveryCents }}" @selected((string) $formValue('delivery_governorate_id') === (string) $governorate->id)>{{ $governorate->name }} — {{ format_money($savedDeliveryCents / 100) }}</option>
                                         @endforeach

@@ -140,6 +140,10 @@ class AdminOrderDetailsUpdateTest extends TestCase
         $this->assertSame('تصحيح البيانات بعد تواصل العميل', data_get($log->properties, 'reason'));
         $this->assertSame('عمر', data_get($log->properties, 'changes.child_name.new'));
         $this->assertTrue((bool) data_get($log->properties, 'scene_snapshots_refreshed'));
+        $exactChanges = collect($log->properties['field_changes'])->keyBy('field');
+        $this->assertSame('201000000001', $exactChanges['orders.'.$sibling->id.'.delivery.phone']['old']);
+        $this->assertSame('201111111111', $exactChanges['orders.'.$sibling->id.'.delivery.phone']['new']);
+        $this->assertArrayNotHasKey('orders.'.$sibling->id.'.child_name', $exactChanges->all());
     }
 
     public function test_production_project_is_safely_synchronized_without_overwriting_manual_scene_text(): void

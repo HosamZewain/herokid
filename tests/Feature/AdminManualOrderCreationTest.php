@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Cart\ShippingDiscountService;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Pricing\PackageAnalyticsService;
 use App\Services\Sales\SalesReportFilters;
@@ -966,6 +967,28 @@ class AdminManualOrderCreationTest extends TestCase
         $order->update(['uploaded_photos' => $paths]);
 
         return $order;
+    }
+
+    public function test_manual_order_and_form_apply_general_shipping_discount_once_to_every_record(): void
+    {
+        $this->governorate->update(['delivery_fee' => 95]);
+        Setting::updateOrCreate(['key' => ShippingDiscountService::KEY], ['value' => json_encode(['enabled' => true, 'type' => 'percent', 'value' => 3500])]);
+        $story = $this->story('قصة خصم الشحن', 345);
+        $product = Product::create(['name_ar' => 'منتج الشحن', 'slug' => 'shipping-test-product', 'price_cents' => 10000, 'is_active' => true]);
+        $this->actingAs($this->admin)->get(route('admin.orders.create'))->assertOk()->assertSee('data-fee-cents="6200"', false);
+        $this->post(route('admin.orders.store'), [...$this->basePayload(), 'stories' => [
+            ['story_id' => $story->id, 'child_name' => 'طفل اختبار', 'child_age' => 6, 'child_gender' => 'boy', 'photos' => [UploadedFile::fake()->image('child-1.jpg'), UploadedFile::fake()->image('child-2.jpg')]],
+            ['story_id' => $story->id, 'child_name' => 'طفلة اختبار', 'child_age' => 8, 'child_gender' => 'girl', 'photos' => [UploadedFile::fake()->image('child-3.jpg'), UploadedFile::fake()->image('child-4.jpg')]],
+        ], 'products' => [$product->id => ['quantity' => 1]], 'payment_status' => 'unpaid'])->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertGreaterThan(1, Order::count());
+        foreach (Order::all() as $order) {
+            $this->assertEquals(95, $order->delivery_details['original_delivery_fee']);
+            $this->assertEquals(33, $order->delivery_details['shipping_discount']);
+            $this->assertEquals(62, $order->delivery_details['delivery_fee']);
+            $this->assertEquals(852, $order->delivery_details['total']);
+            $this->assertSame(0, $order->paid_amount_cents);
+        }
+        $this->assertEquals(95, $this->governorate->fresh()->delivery_fee);
     }
 
     private function basePayload(): array

@@ -14,6 +14,22 @@ class ShippingDiscountService
             json_decode(Setting::where('key', self::KEY)->value('value') ?? '{}', true) ?: []);
     }
 
+    /** Immutable pricing snapshot for a newly quoted delivery address. */
+    public function quote(int $baseCents): array
+    {
+        $baseCents = max(0, $baseCents);
+        $configuration = $this->configuration();
+        $feeCents = $this->feeCents($baseCents, $configuration);
+
+        return [
+            'original_delivery_fee' => $baseCents / 100,
+            'shipping_discount' => ($baseCents - $feeCents) / 100,
+            'delivery_fee' => $feeCents / 100,
+            'general_shipping_discount' => $configuration['enabled'] ? $configuration : null,
+            'free_shipping_offer' => null,
+        ];
+    }
+
     /** Value is cents for fixed discounts, basis points for percentages. */
     public function feeCents(int $baseCents, ?array $configuration = null): int
     {

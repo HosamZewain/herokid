@@ -146,6 +146,8 @@ class AdminOrderQuickEditService
                 abort_unless($order && $order->story_id, 404);
                 $this->authorizePhotos($actor, $data['photos'] ?? []);
                 if (($data['photos'] ?? []) !== []) {
+                    $photoAudit = app(OrderEditAudit::class);
+                    $beforePhotos = $photoAudit->snapshot($orders);
                     $upload = $this->photos->append($order, $data['photos'], $onStored);
                     foreach ($order->items()->where('item_type', 'story')->get() as $item) {
                         $snapshot = $item->personalization_snapshot ?? [];
@@ -154,6 +156,7 @@ class AdminOrderQuickEditService
                     }
                     AdminActivityLogger::log(action: 'order.photos_uploaded', description: 'إضافة صور طفل القصة', subject: $order,
                         properties: ['reason' => $data['change_reason'], 'file_names' => collect($data['photos'])->map(fn ($file) => $file->getClientOriginalName())->all(),
+                            'field_changes_version' => 1, 'field_changes' => $photoAudit->changes($beforePhotos, $photoAudit->snapshot($orders->fresh('items'))),
                             'changes' => ['uploaded_photos_count' => ['old' => $upload['total_count'] - $upload['added_count'], 'new' => $upload['total_count']]]],
                         admin: $actor, request: $request);
                 }
@@ -173,6 +176,8 @@ class AdminOrderQuickEditService
             $orders = Order::query()->where('checkout_group_key', $representative->checkoutGroupKey())
                 ->orderBy('id')->lockForUpdate()->get();
             abort_if($orders->isEmpty(), 404);
+            $editAudit = app(OrderEditAudit::class);
+            $beforeFields = $editAudit->snapshot($orders);
             $before = $orders->mapWithKeys(fn (Order $order): array => [$order->id => [
                 'parent_name' => $order->parent_name,
                 'phone' => data_get($order->delivery_details, 'phone'),
@@ -195,6 +200,7 @@ class AdminOrderQuickEditService
             AdminActivityLogger::log(
                 action: 'checkout.contact_updated', description: $address === [] ? 'تعديل بيانات التواصل' : 'تعديل بيانات التواصل وعنوان الشحن', subject: $first,
                 properties: ['reason' => $data['change_reason'], 'order_ids' => $orders->pluck('id')->all(), 'before' => $before,
+                    'field_changes_version' => 1, 'field_changes' => $editAudit->changes($beforeFields, $editAudit->snapshot($orders)),
                     'changes' => AdminActivityLogger::changedValues($before[$first->id], [...Arr::only($data, ['parent_name', 'phone', 'alternate_phone']), ...($address === [] ? [] : ['shipping_address' => $address])])],
                 admin: $actor, request: $request,
             );
@@ -304,6 +310,8 @@ class AdminOrderQuickEditService
                 if ($order->story_id || $order->items()->whereKeyNot($item->id)->where('personalization_mode', 'collect_child_details')->exists()) {
                     throw ValidationException::withMessages(['personalization' => 'هذا السجل القديم يجمع بيانات طفل لعدة منتجات؛ استخدم تعديل الطلب الكامل لتجنب تغيير منتج آخر.']);
                 }
+                $editAudit = app(OrderEditAudit::class);
+                $beforeFields = $editAudit->snapshot($orders);
                 $schema = $this->itemSchema($item);
                 $before = $item->personalization_snapshot ?? [];
                 $oldValues = $this->itemValues($item, $order);
@@ -345,6 +353,7 @@ class AdminOrderQuickEditService
                     action: 'order.product_details_updated', description: 'تعديل تخصيص منتج واحد: '.$item->title, subject: $order,
                     properties: ['reason' => $data['change_reason'], 'order_item_id' => $item->id, 'product_title' => $item->title,
                         'before' => $before, 'after' => $snapshot,
+                        'field_changes_version' => 1, 'field_changes' => $editAudit->changes($beforeFields, $editAudit->snapshot($orders->fresh('items'))),
                         'changes' => AdminActivityLogger::changedValues($oldValues + ['uploaded_photos_count' => $before['uploaded_photos_count'] ?? 0],
                             $values + ['uploaded_photos_count' => count($order->uploaded_photos ?? [])]),
                         'removed_photo_indexes' => $removed,

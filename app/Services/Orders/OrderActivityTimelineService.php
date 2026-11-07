@@ -132,6 +132,26 @@ class OrderActivityTimelineService
     {
         $details = collect();
 
+        if (($properties['field_changes_version'] ?? null) === 1) {
+            foreach ($properties['field_changes'] ?? [] as $change) {
+                $old = $this->exactValue($change['old'] ?? null, $change['format'] ?? 'text', $change['old_exists'] ?? true);
+                $new = $this->exactValue($change['new'] ?? null, $change['format'] ?? 'text', $change['new_exists'] ?? true);
+                $details->push(['label' => $change['label'], 'value' => $old.' ← '.$new, 'old_value' => $old, 'new_value' => $new]);
+            }
+            if (! empty($properties['shipping_calculation'])) {
+                $details->push(['label' => 'حساب الشحن', 'value' => match ($properties['shipping_calculation']) {
+                    'preserved_existing_fee' => 'تم الاحتفاظ بقيمة الشحن المحفوظة للطلب.',
+                    'governorate_selected_current_discount' => 'تم استكمال محافظة توصيل غير مسجلة؛ حسب الشحن بسعر المحافظة والخصم العام الحالي.',
+                    default => 'تغيرت محافظة التوصيل؛ أعيد حساب الشحن بسعر المحافظة والخصم العام الحالي.',
+                }]);
+            }
+            if (! empty($properties['reason'])) {
+                $details->push(['label' => 'سبب التعديل', 'value' => $properties['reason']]);
+            }
+
+            return $details;
+        }
+
         foreach ((array) ($properties['changes'] ?? []) as $field => $change) {
             if (! is_array($change) || (! array_key_exists('old', $change) && ! array_key_exists('new', $change))) {
                 continue;
@@ -266,6 +286,24 @@ class OrderActivityTimelineService
             'total_cents' => 'إجمالي الطلب بالقرش',
             default => str_replace('_', ' ', $property),
         };
+    }
+
+    private function exactValue(mixed $value, string $format, bool $exists): string
+    {
+        if (! $exists) {
+            return 'غير موجود';
+        }
+        if ($value === null || $value === '') {
+            return '—';
+        }
+        if ($format === 'money_cents') {
+            return format_money(((int) $value) / 100);
+        }
+        if (is_bool($value)) {
+            return $value ? 'نعم' : 'لا';
+        }
+
+        return is_scalar($value) ? (string) $value : (json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '—');
     }
 
     private function displayValue(mixed $value): string

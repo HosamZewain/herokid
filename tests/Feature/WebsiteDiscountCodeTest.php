@@ -10,11 +10,13 @@ use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\Setting;
+use App\Models\Story;
 use App\Models\User;
 use App\Services\Cart\FreeShippingOfferService;
 use App\Services\Cart\ShippingDiscountService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class WebsiteDiscountCodeTest extends TestCase
@@ -39,6 +41,36 @@ class WebsiteDiscountCodeTest extends TestCase
         $this->assertEquals(598, $new->delivery_details['total']);
         $this->assertSame($old, Order::findOrFail($old['id'])->toArray());
         $this->assertEquals(150, $governorate->fresh()->delivery_fee);
+    }
+
+    public function test_website_story_and_personalized_product_keep_discounted_shipping_on_all_checkout_records(): void
+    {
+        Storage::fake('local');
+        Setting::updateOrCreate(['key' => 'story_global_price_enabled'], ['value' => '0']);
+        Setting::updateOrCreate(['key' => ShippingDiscountService::KEY], ['value' => json_encode(['enabled' => true, 'type' => 'percent', 'value' => 3500])]);
+        [$country, $governorate] = $this->delivery(95);
+        $story = Story::create(['title' => 'قصة اختبار الشحن', 'slug' => 'shipping-story', 'price' => 200, 'active' => true, 'language' => 'ar', 'gender' => 'both']);
+        $product = $this->product(34500);
+        $product->update(['personalization_mode' => 'collect_child_details']);
+        $cart = $this->cart($product);
+        $cart['product-key'] = [...$cart['product-key'], 'personalization_mode' => 'collect_child_details',
+            'child_name' => 'طفلة المنتج', 'child_age' => 6, 'child_gender' => 'girl',
+            'uploaded_photos' => ['cart/product-photo-1.jpg', 'cart/product-photo-2.jpg']];
+        $cart['story-key'] = ['key' => 'story-key', 'item_type' => 'story', 'story_id' => $story->id, 'story_price' => 200,
+            'child_name' => 'طفل القصة', 'child_age' => 8, 'child_gender' => 'boy',
+            'uploaded_photos' => ['cart/story-photo-1.jpg', 'cart/story-photo-2.jpg']];
+        $this->withSession(['cart.items' => $cart])->post(route('checkout.store'), [
+            ...$this->checkoutPayload($country, $governorate, '01012345678'), 'expected_delivery_fee' => 62,
+        ])->assertSessionHasNoErrors()->assertRedirect(route('checkout.success'));
+        $this->assertDatabaseCount('orders', 2);
+        foreach (Order::all() as $order) {
+            $this->assertEquals(95, $order->delivery_details['original_delivery_fee']);
+            $this->assertEquals(33, $order->delivery_details['shipping_discount']);
+            $this->assertEquals(62, $order->delivery_details['delivery_fee']);
+            $this->assertEquals(607, $order->delivery_details['total']);
+        }
+        $this->assertCount(1, Order::pluck('checkout_group_key')->unique());
+        $this->assertEquals(95, $governorate->fresh()->delivery_fee);
     }
 
     public function test_changed_general_shipping_discount_requires_new_review(): void

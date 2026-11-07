@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Cart\ShippingDiscountService;
 use App\Services\OrderAutomation\Process\ProcessEvents;
 use App\Services\Pricing\StoryPricingService;
 use App\Services\Uploads\OrderPhotoUploadService;
@@ -100,7 +101,9 @@ class AdminOrderCreationService
                 });
                 $itemsSubtotalCents = (int) $storyPrices->sum(fn (array $price): int => (int) round($price['effective_price'] * 100))
                     + (int) $productLines->sum('total_price_cents');
-                $deliveryCents = (int) round(max(0, $governorate->effectiveDeliveryFee()) * 100);
+                $shippingQuote = app(ShippingDiscountService::class)
+                    ->quote((int) round(max(0, $governorate->effectiveDeliveryFee()) * 100));
+                $deliveryCents = (int) round($shippingQuote['delivery_fee'] * 100);
                 $discountCents = (int) round(max(0, (float) ($data['discount_amount'] ?? 0)) * 100);
                 $grossCents = $itemsSubtotalCents + $deliveryCents;
 
@@ -357,6 +360,9 @@ class AdminOrderCreationService
                     }
                 }
 
+                foreach ($orders as $createdOrder) {
+                    $createdOrder->forceFill(['delivery_details' => array_replace($createdOrder->delivery_details ?? [], $shippingQuote)])->save();
+                }
                 app(ProcessEvents::class)->checkoutCompleted($firstOrder->fresh());
 
                 return [

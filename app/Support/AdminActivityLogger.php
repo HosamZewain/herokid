@@ -72,7 +72,7 @@ class AdminActivityLogger
         return self::sanitizeValue($payload);
     }
 
-    private static function sanitizeValue(mixed $value, ?string $key = null): mixed
+    private static function sanitizeValue(mixed $value, ?string $key = null, bool $truncateStrings = true): mixed
     {
         if ($key !== null && self::isSensitiveKey($key)) {
             return '[filtered]';
@@ -89,7 +89,7 @@ class AdminActivityLogger
         if (is_array($value)) {
             return collect($value)
                 ->mapWithKeys(fn (mixed $item, string|int $itemKey): array => [
-                    $itemKey => self::sanitizeValue($item, (string) $itemKey),
+                    $itemKey => self::sanitizeValue($item, (string) $itemKey, $truncateStrings && $itemKey !== 'field_changes'),
                 ])
                 ->all();
         }
@@ -102,7 +102,8 @@ class AdminActivityLogger
         }
 
         if (is_string($value)) {
-            return Str::limit($value, 2000, '...');
+            // Validated order field diffs retain complete values, including long historical notes.
+            return $truncateStrings ? Str::limit($value, 2000, '...') : $value;
         }
 
         return $value;

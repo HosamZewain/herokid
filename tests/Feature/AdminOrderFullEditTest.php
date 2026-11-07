@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\AdminActivityLog;
 use App\Models\DeliveryCountry;
 use App\Models\DeliveryGovernorate;
 use App\Models\Order;
@@ -11,8 +12,10 @@ use App\Models\ProductVariant;
 use App\Models\Setting;
 use App\Models\Story;
 use App\Models\User;
+use App\Services\Cart\ShippingDiscountService;
 use App\Services\Orders\AdminOrderGroupService;
 use App\Services\Orders\AdminOrderUpdateService;
+use App\Services\Orders\OrderActivityTimelineService;
 use App\Services\Orders\OrderSceneTextService;
 use App\Support\ProductVariantSnapshot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -965,6 +968,60 @@ class AdminOrderFullEditTest extends TestCase
         $this->assertSame($photos, $first->fresh()->uploaded_photos);
         $this->assertSame($paid, $first->fresh()->paid_amount_cents);
         $this->assertSame($itemIds, $first->items()->pluck('id')->all());
+    }
+
+    public function test_full_edit_records_exact_address_child_and_item_changes_without_losing_other_children(): void
+    {
+        [$first, $second] = $this->createCheckout();
+        $payload = $this->editBasePayload($first);
+        $payload['street'] = 'شارع جديد 17';
+        $payload['stories'][0]['child_name'] = 'اسم بعد التعديل';
+        $payload['stories'][0]['parent_notes'] = trim(str_repeat('ملاحظة ', 180));
+        $payload['change_reason'] = 'تصحيح العنوان واسم الطفل الأول فقط.';
+        $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $first), $payload)->assertSessionHasNoErrors()->assertRedirect();
+        $log = AdminActivityLog::where('action', 'checkout.full_order_updated')->sole();
+        $changes = collect($log->properties['field_changes'])->keyBy('field');
+        $this->assertSame(1, $log->properties['field_changes_version']);
+        $this->assertSame($this->admin->id, $log->user_id);
+        $this->assertSame('شارع 1', $changes['orders.'.$first->id.'.delivery.street']['old']);
+        $this->assertSame('شارع جديد 17', $changes['orders.'.$first->id.'.delivery.street']['new']);
+        $this->assertSame('ليلى', $changes['orders.'.$first->id.'.child_name']['old']);
+        $this->assertSame('اسم بعد التعديل', $changes['orders.'.$first->id.'.child_name']['new']);
+        $this->assertSame($payload['stories'][0]['parent_notes'], $changes['orders.'.$first->id.'.parent_notes']['new']);
+        $this->assertArrayNotHasKey('orders.'.$second->id.'.child_name', $changes->all());
+        $this->assertTrue($changes->contains(fn ($change) => str_contains($change['field'], '.items.') && ! $change['new_exists']));
+        $event = app(OrderActivityTimelineService::class)->forGroup(app(AdminOrderGroupService::class)->findByRepresentative($first->id))['events']->firstWhere('id', $log->id);
+        $this->assertGreaterThan(12, $event['details']->count());
+        $this->assertTrue($event['details']->contains(fn ($detail) => ($detail['new_value'] ?? null) === $payload['stories'][0]['parent_notes']));
+    }
+
+    public function test_changed_governorate_applies_shipping_discount_and_preserves_original_quote_on_later_edits(): void
+    {
+        [$first] = $this->createCheckout();
+        Setting::updateOrCreate(['key' => ShippingDiscountService::KEY], ['value' => json_encode(['enabled' => true, 'type' => 'percent', 'value' => 3500])]);
+        $next = DeliveryGovernorate::where('delivery_country_id', $this->country->id)->whereKeyNot($this->governorate->id)->firstOrFail();
+        $next->update(['delivery_fee' => 95, 'active' => true]);
+        $payload = $this->editBasePayload($first);
+        $payload['delivery_governorate_id'] = $next->id;
+        $this->actingAs($this->admin)->put(route('admin.orders.groups.update', $first), $payload)->assertSessionHasNoErrors()->assertRedirect();
+        foreach (Order::where('checkout_group_key', $first->checkout_group_key)->get() as $order) {
+            $this->assertEquals(95, $order->delivery_details['original_delivery_fee']);
+            $this->assertEquals(33, $order->delivery_details['shipping_discount']);
+            $this->assertEquals(62, $order->delivery_details['delivery_fee']);
+        }
+        $log = AdminActivityLog::where('action', 'checkout.full_order_updated')->sole();
+        $this->assertSame('governorate_changed_current_discount', $log->properties['shipping_calculation']);
+        $change = collect($log->properties['field_changes'])->firstWhere('field', 'orders.'.$first->id.'.delivery.delivery_fee');
+        $this->assertSame(5000, $change['old']);
+        $this->assertSame(6200, $change['new']);
+        Setting::where('key', ShippingDiscountService::KEY)->update(['value' => json_encode(['enabled' => false, 'type' => 'fixed', 'value' => 0])]);
+        $payload = $this->editBasePayload($first->fresh());
+        $payload['delivery_governorate_id'] = $next->id;
+        $payload['parent_name'] = 'تصحيح الاسم فقط';
+        $this->put(route('admin.orders.groups.update', $first), $payload)->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertEquals(62, $first->fresh()->delivery_details['delivery_fee']);
+        $this->assertEquals(33, $first->fresh()->delivery_details['shipping_discount']);
+        $this->assertSame('preserved_existing_fee', AdminActivityLog::where('action', 'checkout.full_order_updated')->latest('id')->first()->properties['shipping_calculation']);
     }
 
     private function productOrder(string $number, string $groupKey, Product $product, int $priceCents): Order

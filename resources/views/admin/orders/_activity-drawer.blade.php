@@ -97,7 +97,14 @@
                                     @foreach($event['details'] as $detail)
                                         <div class="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2 text-[11px] leading-5">
                                             <dt class="font-black text-gray-500">{{ $detail['label'] }}</dt>
-                                            <dd class="break-words font-bold text-gray-800">{{ $detail['value'] }}</dd>
+                                            <dd class="min-w-0 break-words font-bold text-gray-800">
+                                                @if(array_key_exists('old_value', $detail))
+                                                    <div class="whitespace-pre-wrap"><span class="font-black text-gray-500">قبل: </span>{{ $detail['old_value'] }}</div>
+                                                    <div class="whitespace-pre-wrap"><span class="font-black text-indigo-700">بعد: </span>{{ $detail['new_value'] }}</div>
+                                                @else
+                                                    <span class="whitespace-pre-wrap">{{ $detail['value'] }}</span>
+                                                @endif
+                                            </dd>
                                         </div>
                                     @endforeach
                                 </dl>
