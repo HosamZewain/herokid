@@ -1,6 +1,12 @@
 // Native forms are an internal commerce adapter. Customers answer messages; only
 // upload controls and the final native review are displayed, never a product form.
-export function intakeNames(key) { return [key, `child[${key}]`, `personalizations[0][${key}]`]; }
+export function intakeNames(key, unit = null) {
+    return unit === null ? [key, `child[${key}]`, `personalizations[0][${key}]`] : [`personalizations[${unit}][${key}]`];
+}
+export function intakeFieldKey(name) {
+    const key=name?.match(/^personalizations\[\d+\]\[([a-z_]+)\]$/)?.[1];
+    return ['child_name','child_age','child_gender','parent_name','phone','street'].find(k=>key===k || intakeNames(k).includes(name)) || 'commerce';
+}
 export function normalizeIntake(value) {
     return String(value).normalize('NFKC').replace(/[٠-٩]/g,c=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(c))).replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/[ً-ٟـ]/g,'').trim().toLowerCase();
 }
@@ -18,7 +24,7 @@ export function startSalesIntake(report) {
     form.querySelectorAll('[data-package-story-select]').forEach(c=>c.required=true);
     const originals=[...form.children];originals.forEach(n=>n.classList.add('hk-sales-intake-unused'));
     const photoHost=document.createElement('div');photoHost.dataset.messagePhotos='';form.append(photoHost);
-    const photoSteps=[...form.querySelectorAll('[data-photo-input],[data-identity-photo-input],input[type="file"]')].map((control,index)=>{const unit=control.closest('[data-personalization-unit]');let min=Number(control.dataset.salesMinFiles ?? form.dataset.salesMinPhotos ?? (story?2:1));try{min=Number(JSON.parse(unit?.querySelector('[data-identity-upload-config]')?.textContent || '{}').minimumFiles ?? min);}catch{}return {key:`photos:${index}`,control,unit,panel:control.closest('[data-package-uploader]') || control.parentElement,min,kind:'photos',options:[],label:`ابعت صور الطفل${unit?' '+(Number(unit.dataset.personalizationUnit)+1):''} من زر رفع الصور.`};});
+    const photoSteps=[...form.querySelectorAll('[data-photo-input],[data-identity-photo-input],input[type="file"]')].map((control,index)=>{const unit=control.closest('[data-personalization-unit]');let min=Number(control.dataset.salesMinFiles ?? form.dataset.salesMinPhotos ?? (story?2:1));try{min=Number(JSON.parse(unit?.querySelector('[data-identity-upload-config]')?.textContent || '{}').minimumFiles ?? min);}catch{}return {key:`photos:${index}`,control,unit,panel:control.closest('[data-package-uploader]') || control.parentElement,min,kind:'photos',options:[],label:`ارفع ${control.parentElement.querySelector('h3')?.textContent.trim() || 'صور الطفل'}${unit?' '+(Number(unit.dataset.personalizationUnit)+1):''} من زر رفع الصور. المطلوب ${min===1?'صورة واحدة':min===2?'صورتين':min+' صور'} على الأقل.`};});
     let current=null, done=new Set(), edit=null, lastSignature='', paused=false;
     const active=c=>!c.disabled && (!c.closest('[hidden],.hidden') || c.matches('[data-package-story-select]')) && c.type!=='hidden' && c.type!=='search' && c.type!=='checkbox';
     function label(c) {
@@ -55,7 +61,7 @@ export function startSalesIntake(report) {
         if(s.control.type==='radio')return [...form.elements].some(c=>c.name===s.key && c.checked);
         return s.control.getAttribute('aria-invalid')!=='true' && !!s.control.value && s.control.checkValidity();
     }
-    function nativeKey(c) {return ['child_name','child_age','child_gender','parent_name','phone','street'].find(k=>intakeNames(k).includes(c?.name)) || 'commerce';}
+    function nativeKey(c) {return intakeFieldKey(c?.name);}
     function hidePhotos() {photoHost.hidden=true;[...photoHost.children].forEach(p=>p.hidden=true);}
     function showPhotos(s) {
         const panel=s.panel;panel.classList.remove('hk-sales-intake-unused');panel.hidden=false;photoHost.append(panel);photoHost.hidden=false;
@@ -100,13 +106,14 @@ export function startSalesIntake(report) {
         if(!current || current.key!==token)return {accepted:false,message:'الخطوة اتغيرت؛ رد على السؤال الحالي.'};
         let applied=0;
         for(const [key,value] of Object.entries(values)) {
-            const step=steps().find(s=>intakeNames(key).includes(s.key));
+            const unit=current.key.match(/^personalizations\[(\d+)\]/)?.[1];
+            const step=steps().find(s=>intakeNames(key,unit ?? null).includes(s.key));
             if(step && (step.key===token || !complete(step)) && set(step,value))applied++;
         }
         if(!applied) {
             if(current.kind==='photos'){question();return {accepted:false,message:'ارفع الصور واستنى اكتمالها، وبعدها اضغط تم رفع الصور.'};}
             if(/^(تخطي|تخطى|لا|مش محتاج|بدون|skip)$/i.test(text.trim()) && !current.control.required){done.add(current.key);applied++;}
-            else if(!Object.keys(values).length && set(current,text))applied++;
+            else if((!Object.keys(values).length || nativeKey(current.control)==='commerce') && set(current,text))applied++;
         }
         if(!applied)return {accepted:false,message:'مش واضح الاختيار. اكتب إجابتك أو اختار من الأزرار الظاهرة.'};
         lastSignature='';question();return {accepted:true};

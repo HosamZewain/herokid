@@ -16,9 +16,15 @@ Each private answer increments existing message/reply/intake usage counters exac
 
 ## Validation
 
-PHP8.3 isolated SQLite: 92 tests/865 assertions, one MySQL-only concurrency test skipped. Isolated MySQL: 92 tests/907 assertions, none skipped. After the final idempotency adjustment, focused private-intake tests passed on both engines:9 tests/119 assertions each. JavaScript7, PHP formatting, syntax, diff and lockfile/manifest checks pass.
+PHP8.3 isolated SQLite: 92 tests/865 assertions, one MySQL-only concurrency test skipped. Isolated MySQL: 92 tests/907 assertions, none skipped. After the final idempotency adjustment, focused private-intake tests passed on both engines:9 tests/119 assertions each. JavaScript8, PHP formatting, syntax, diff and lockfile/manifest checks pass.
 
 Local Chromium synthetic fixtures exercised message-only story customization and batched contacts through actual two-photo upload, delivery, native review and final order receipt; existing-order separate/shipping choices appeared as chat messages. Personalized puzzle variant/custom description/child data, two photos, photo deletion/replacement/minimum guard, native cart and fresh-child isolation passed. Package child/story choices and two photos reached the native cart.320/390/844/1440 widths and reduced-height composer checks passed; screenshots inspected, zero script errors. Provider recommendation replies were mocked locally; these tests do not establish real-model accuracy or physical-device behavior. No synthetic production inference/order/payment/shipping/customer-message call.
+
+A second browser matrix copied **only published product configuration** through a read-only AWS transaction into synthetic local fixtures: **23 products/36 variant paths, all passed**. Every configured required field, photo minimum, exact variant/name, effective price and page-count snapshot survived the native cart. All four coloring choices (20/40/50 pages and50-pageA3) reached the native final review with the correct price and selection; no order was submitted in this matrix. Seven notebook subjects, both notebook directions, both mug/puzzle/poster options, school fields, products without photos and nonpersonalized activities were covered. Numeric phone text printed on a product is now consumed by its current product field, rather than lost as a contact-only capture. Upload prompts preserve each product's configured photo label/minimum, including family photos.
+
+A separate40-page coloring case with two children passed compact messages, explicit independent names/genders,3photos for the first and1for the second, disjoint photo paths, two cart lines and unchanged40-page variants. Message context and batch application now target the current child unit rather than hardcoding unit0.
+
+**A3 limitation:** the published A3 choice has no `book_page_count` and existing `BookCatalog`/`BookVariantSnapshot` deliberately reject A3 for automated book production. Purchase identity/price were verified and preserved; this release does not alter that production guard, infer metadata from its name, run production jobs or claim automatic A3 print readiness. Production support for that size is separate work.
 
 ## Publication and recovery
 

@@ -170,7 +170,7 @@ if (root) {
         if(event.data.stage==='complete') { notice('طلبك اتسجل. رقم الطلب وحالته ظاهرين في صفحة التأكيد.'); if(state)storageSet(`hk-sales-frame:${state.conversation}`,''); }
     });
     function renderQuestion(data) {
-        nativeQuestion=data;privateStep=data.field;q('[data-private-draft]').hidden=true;frame.hidden=!data.upload;
+        nativeQuestion=data;dialogue.dataset.questionToken=data.token;privateStep=data.field;q('[data-private-draft]').hidden=true;frame.hidden=!data.upload;
         dialogue.replaceChildren(element('div','hk-sales-message',data.question));
         input.placeholder=data.upload?'ارفع الصور من الزر الظاهر…':data.ready?'راجع الاختيار، أو اختار خطوة لتعديلها…':'اكتب إجابتك هنا، وممكن تبعت أكثر من بيان مع بعض…';
         const options=element('div','hk-sales-chips');

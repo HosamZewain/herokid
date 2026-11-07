@@ -40,3 +40,12 @@ test('native chat choices normalize Arabic but reject ambiguous or invented IDs'
  assert.equal(matchIntakeOption('غير موجود',[{value:'12',label:'القاهرة'}]),null);
  assert.equal(matchIntakeOption('وسط البلد',[{value:'1',label:'وسط البلد'},{value:'2',label:'وسط البلد'}]),null);
 });
+
+test('native message context and batch application stay with the current child unit',async()=>{
+ const {intakeNames,intakeFieldKey}=await import('../../resources/js/sales-assistant-intake.js');
+ assert.equal(intakeFieldKey('personalizations[1][child_name]'),'child_name');
+ assert.equal(intakeFieldKey('personalizations[2][child_gender]'),'child_gender');
+ assert.equal(intakeFieldKey('personalizations[1][parent_notes]'),'commerce');
+ assert.deepEqual(intakeNames('child_name','1'),['personalizations[1][child_name]']);
+ assert.ok(!intakeNames('child_name','1').includes('personalizations[0][child_name]'));
+});
