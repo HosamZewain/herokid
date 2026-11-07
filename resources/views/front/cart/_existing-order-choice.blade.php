@@ -93,7 +93,7 @@
                     dialog.querySelector('[data-existing-order-status]').textContent = selectedOrder.status_label;
                     const cancelButton = dialog.querySelector('[data-order-choice="cancel_previous"]');
                     const mergeButton = dialog.querySelector('[data-order-choice="merge"]');
-                    cancelButton.disabled = !selectedOrder.can_cancel;
+                    if (cancelButton) cancelButton.disabled = !selectedOrder.can_cancel;
                     mergeButton.disabled = !selectedOrder.can_merge && !selectedOrder.can_request_shipping_merge;
                     dialog.classList.remove('hidden');
                     dialog.classList.add('flex');

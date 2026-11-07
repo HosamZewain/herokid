@@ -27,6 +27,47 @@ class SalesAssistantIntakeTest extends TestCase
         $this->openSales();
     }
 
+    public function test_compact_message_uses_current_question_to_distinguish_child_and_recipient(): void
+    {
+        $parser = app(SalesIntake::class);
+        $child = $parser->extract('ليان ٦ سنين بنت', 'child_name')['fields'];
+        $this->assertSame('ليان', $child['child_name']);
+        $this->assertSame('6', $child['child_age']);
+        $this->assertSame('girl', $child['child_gender']);
+        $contact = $parser->extract('مريم أحمد، 01012345678، القاهرة شارع الورد عمارة 12', 'parent_name')['fields'];
+        $this->assertSame('مريم أحمد', $contact['parent_name']);
+        $this->assertSame('01012345678', $contact['phone']);
+        $this->assertSame('القاهرة شارع الورد عمارة 12', $contact['street']);
+        $this->assertArrayNotHasKey('parent_name', $parser->extract('مريم أحمد، 01012345678، القاهرة شارع الورد عمارة 12')['fields']);
+    }
+
+    public function test_native_product_answers_are_private_free_counted_and_idempotent(): void
+    {
+        $payload = ['message' => 'تصميم المدرسة الخاصة باسم مريم أحمد', 'private_step' => 'commerce', 'client_nonce' => (string) Str::uuid()];
+        $this->postJson(route('sales.message'), $payload)->assertStatus(202)->assertJsonPath('status', 'completed')->assertJsonPath('private_fields', []);
+        $this->postJson(route('sales.message'), $payload)->assertStatus(202);
+        $this->assertDatabaseCount('sales_turns', 1);
+        $this->assertDatabaseCount('orders', 0);
+        $turn = SalesTurn::sole();
+        $this->assertStringNotContainsString('مريم أحمد', $turn->request_text.json_encode($turn->result, JSON_UNESCAPED_UNICODE));
+        $this->assertSame(0, $turn->spent_micros);
+        $this->assertSame(1, DB::table('sales_assistant_events')->where('type', 'message_received')->count());
+        $this->assertSame(1, DB::table('sales_assistant_events')->where('type', 'reply_completed')->count());
+        Queue::assertNothingPushed();
+        Http::assertNothingSent();
+    }
+
+    public function test_private_data_messages_do_not_consume_the_paid_five_message_quota(): void
+    {
+        for ($i = 0; $i < 8; $i++) {
+            $this->postJson(route('sales.message'), ['message' => 'تخطي', 'private_step' => 'commerce', 'client_nonce' => (string) Str::uuid()])->assertStatus(202)->assertJsonPath('status', 'completed');
+        }
+        $this->postJson(route('sales.message'), ['message' => 'اسم ولي الأمر: مريم أحمد، الموبايل: 01012345678، العنوان: 12 شارع الورد', 'private_step' => 'commerce', 'client_nonce' => (string) Str::uuid()])
+            ->assertStatus(202)->assertJsonPath('private_fields.parent_name', 'مريم أحمد')->assertJsonPath('private_fields.phone', '01012345678');
+        $this->postJson(route('sales.message'), ['message' => 'قصة عن الصلاة', 'client_nonce' => (string) Str::uuid()])->assertStatus(202);
+        $this->assertSame(1, DB::table('sales_turns')->where('status', 'queued')->count());
+    }
+
     public function test_batch_details_are_captured_once_without_ai_cost_or_private_values_in_history_events(): void
     {
         $nonce = (string) Str::uuid();

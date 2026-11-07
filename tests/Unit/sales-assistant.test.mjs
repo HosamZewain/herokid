@@ -31,3 +31,12 @@ test('checkout action opens only a current populated cart and cannot submit an o
  for(const next of ['discover','choose','handoff','confirm','admin'])assert.equal(checkoutAction({...turn,result:{next}},{line_count:1}),false);
  assert.equal(checkoutAction({...turn,status:'queued'},{line_count:1}),false);
 });
+
+const {normalizeIntake,matchIntakeOption}=await import('../../resources/js/sales-assistant-intake.js');
+test('native chat choices normalize Arabic but reject ambiguous or invented IDs',()=>{
+ assert.equal(normalizeIntake(' أحمَد  '),'احمد');
+ assert.equal(matchIntakeOption('٦',[{value:'6',label:'٦ سنوات'}]),'6');
+ assert.equal(matchIntakeOption('القاهرة',[{value:'12',label:'القاهرة'}]),'12');
+ assert.equal(matchIntakeOption('غير موجود',[{value:'12',label:'القاهرة'}]),null);
+ assert.equal(matchIntakeOption('وسط البلد',[{value:'1',label:'وسط البلد'},{value:'2',label:'وسط البلد'}]),null);
+});

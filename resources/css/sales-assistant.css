@@ -27,3 +27,13 @@
 @media(max-width:420px){.hk-sales-private-draft{grid-template-columns:1fr}.hk-sales-workbar span{width:100%;order:3}}
 
 .hk-sales-checkout-action{display:block;min-height:48px;border-radius:12px;padding:10px 18px;background:var(--sales-purple);color:#fff;font-size:16px;font-weight:800;margin:12px 0 18px}
+
+.hk-sales-workspace:has(.hk-sales-dialogue) .hk-sales-workbar{display:none}
+.hk-sales-dialogue:empty{display:none}
+.hk-sales-dialogue .hk-sales-message{margin:12px 0;max-width:100%}
+.hk-sales-dialogue .hk-sales-chips{max-height:230px;overflow:auto;padding:6px}
+.hk-sales-dialogue button{min-height:44px;font-size:16px}
+.hk-sales-edit-answers{padding:12px;font-size:15px}
+.hk-sales-edit-answers button{display:block;margin:8px 0;padding:8px 12px;color:#5341bf}
+.hk-sales-workspace iframe[hidden]{display:none!important}
+.hk-sales-workspace:has(.hk-sales-dialogue){background:transparent;border:0;border-radius:0;overflow:visible}

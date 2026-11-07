@@ -100,9 +100,33 @@ class SalesIntake
                 unset($fields['child_gender']);
             }
         }
+        // Context disambiguates a compact answer such as name + phone + street,
+        // or child name + age + gender, without sending private data to inference.
+        if (! $question && ! $ambiguous && $expected === 'parent_name' && isset($fields['phone']) && ! isset($fields['parent_name'])) {
+            $firstPhone = $phones[0][0] ?? '';
+            $parts = $firstPhone !== '' ? explode($firstPhone, $numbers, 2) : [];
+            $name = preg_replace('/^[\s،,;؛-]+|[\s،,;؛-]+$/u', '', $parts[0] ?? '');
+            if (preg_match('/^[\pL\pM ]{2,80}$/u', $name)) {
+                $fields['parent_name'] = $name;
+            }
+            $address = preg_replace('/^[\s،,;؛-]+|[\s،,;؛-]+$/u', '', $parts[1] ?? '');
+            if (! isset($fields['street']) && preg_match('/(?:شارع|ش\s|عمارة|عقار|طريق|street)/iu', $address)) {
+                $fields['street'] = mb_substr($address, 0, 300);
+            }
+        }
+        if (! $question && ! $ambiguous && $expected === 'child_name' && ! isset($fields['child_name'])
+            && preg_match('/^([\pL\pM ]{2,60}?)\s*[,،]?\s*(?=[0-9]{1,2}\s*(?:سنين|سنوات|سنه|سنة)|(?:ولد|بنت)(?!\pL))/u', $numbers, $compactChild)) {
+            $fields['child_name'] = trim($compactChild[1]);
+        }
         $private = (bool) array_intersect_key($fields, array_flip(['child_name', 'parent_name', 'phone', 'street']));
 
         return ['fields' => $fields, 'handled' => $private || ((bool) $expected && ! $question) || (bool) $ambiguous, 'ambiguous' => (bool) $ambiguous];
+    }
+
+    /** An answer to a native schema question is private, never a model prompt. */
+    public function receiveNative(Request $request, SalesConversation $conversation, string $nonce): SalesTurn
+    {
+        return $this->receive($request, $conversation, $nonce, ['fields' => [], 'handled' => true, 'ambiguous' => false, 'native' => true]);
     }
 
     public function remember(Request $request, SalesConversation $conversation, array $capture): array
@@ -129,9 +153,9 @@ class SalesIntake
             }
             $fields = $this->remember($request, $conversation, $capture);
             $facts = (isset($fields['child_age']) ? ' عمر الطفل '.$fields['child_age'].' سنوات.' : '').(isset($fields['child_gender']) ? ($fields['child_gender'] === 'girl' ? ' بنت.' : ' ولد.') : '');
-            $message = $capture['ambiguous'] ? 'الرسالة فيها بيانات لأكثر من طفل. نكمّل طفل واحد في كل مرة علشان الصور والمنتجات تتربط صح. مين نبدأ به؟'
-                : ($capture['fields'] ? 'فهمت البيانات اللي بعتها. راجعها في بطاقة البيانات هنا، وعدّل أي حاجة محتاجة تصحيح، وبعدها استخدمها للعنصر الحالي. هنسأل عن الناقص بس.'
-                    : 'البيان مش واضح كفاية علشان أسجله صح. اكتبه مع توضيح المقصود، زي «اسم الطفل: …» أو كمّل الخانة الظاهرة هنا.');
+            $message = ($capture['native'] ?? false) ? 'استلمت إجابتك. نراجعها ونكمّل السؤال التالي هنا.' : ($capture['ambiguous'] ? 'الرسالة فيها بيانات لأكثر من طفل. نكمّل طفل واحد في كل مرة علشان الصور والمنتجات تتربط صح. مين نبدأ به؟'
+                : ($capture['fields'] ? 'فهمت البيانات اللي بعتها. هنستخدمها للاختيار الحالي ونسأل عن الناقص بس؛ تقدر تراجع وتعدّل قبل تأكيد الطلب.'
+                    : 'البيان مش واضح كفاية علشان أسجله صح. اكتبه مع توضيح المقصود، زي «اسم الطفل: …» أو جاوب على السؤال الحالي في الرسائل.'));
             $turn = SalesTurn::create(['id' => (string) Str::uuid7(), 'conversation_id' => $conversation->id, 'client_nonce' => $nonce,
                 'status' => 'completed', 'budget_day' => now('Africa/Cairo')->toDateString(), 'capability_nonce' => Str::random(64),
                 'request_text' => ($capture['ambiguous'] ? 'بيانات طفلين؛ نحتاج تحديد الطفل.' : (isset($capture['fields']['child_name']) ? 'بيانات طفل جديد للمراجعة.' : 'تم استلام بيانات خاصة للمراجعة.')).$facts, 'result' => ['message' => $message, 'recommendations' => [], 'upsell' => false, 'next' => 'discover'], 'finished_at' => now()]);

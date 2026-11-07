@@ -11,7 +11,7 @@
                         <label class="block rounded-2xl border border-dashed border-indigo-300 p-4">
                             <span class="block font-bold">صور الطفل {{ $field['required'] ? '*' : '(اختياري)' }}</span>
                             <span class="block text-sm text-slate-500">{{ $field['required'] ? 'من '.$field['min_files'].' إلى' : 'حتى' }} {{ $field['max_files'] }} صور · {{ $photoUploadConfig['maxSizeMb'] }} ميجا للصورة</span>
-                            <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" class="mt-2 block w-full" data-package-photo-input>
+                            <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" class="mt-2 block w-full" data-sales-min-files="{{ $field['required'] ? $field['min_files'] : 0 }}" data-package-photo-input>
                             <span class="mt-1 hidden text-xs text-red-600" data-package-photo-error></span>
                         </label>
                         <div class="mt-2 flex flex-wrap gap-2" data-package-photo-previews></div>

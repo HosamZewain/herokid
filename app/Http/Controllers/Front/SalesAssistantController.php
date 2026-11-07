@@ -55,21 +55,32 @@ class SalesAssistantController extends Controller
     public function message(Request $request, SalesSessions $sessions, SalesBudget $budget, SalesPrivacy $privacy, SalesCart $cart)
     {
         $this->check();
-        $input = $request->validate(['message' => 'required|string|max:1500', 'client_nonce' => 'required|uuid', 'private_step' => 'nullable|in:'.implode(',', SalesIntake::FIELDS)]);
+        $input = $request->validate(['message' => 'required|string|max:1500', 'client_nonce' => 'required|uuid', 'private_step' => 'nullable|in:'.implode(',', [...SalesIntake::FIELDS, 'commerce'])]);
         abort_if(array_diff(array_keys($request->except('_token')), ['message', 'client_nonce', 'private_step']), 422);
         $conversation = $sessions->own($request);
         // Idempotent retransmission gets its existing receipt without paying again.
         $existing = SalesTurn::where('conversation_id', $conversation->id)->where('client_nonce', $input['client_nonce'])->first();
         if ($existing) {
-            return response()->json(['turn_id' => $existing->id, 'status' => $existing->status], 202);
+            $previousCapture = app(SalesIntake::class)->extract($input['message'], ($input['private_step'] ?? '') === 'commerce' ? null : ($input['private_step'] ?? null));
+
+            return response()->json(['turn_id' => $existing->id, 'status' => $existing->status, 'private_fields' => $previousCapture['fields'], 'private_ambiguous' => $previousCapture['ambiguous']], 202)->header('Cache-Control', 'private, no-store');
         }
-        $rate = 'sales-message:'.$sessions->hash($request);
-        if (RateLimiter::tooManyAttempts($rate, (int) config('sales_assistant.per_minute'))) {
+        $capture = app(SalesIntake::class)->extract($input['message'], $input['private_step'] ?? null);
+        $private = isset($input['private_step']) || $capture['handled'];
+        $rate = ($private ? 'sales-intake:' : 'sales-message:').$sessions->hash($request);
+        if (RateLimiter::tooManyAttempts($rate, $private ? 30 : (int) config('sales_assistant.per_minute'))) {
             $sessions->event($conversation, 'rate_limited');
             abort(429, 'استنى دقيقة قبل رسائل جديدة.');
         }
         RateLimiter::hit($rate, 60);
-        $capture = app(SalesIntake::class)->extract($input['message'], $input['private_step'] ?? null);
+        if (($input['private_step'] ?? '') === 'commerce') {
+            $nativeCapture = app(SalesIntake::class)->extract($input['message']);
+            $turn = $nativeCapture['fields'] || $nativeCapture['ambiguous']
+                ? app(SalesIntake::class)->receive($request, $conversation, $input['client_nonce'], $nativeCapture)
+                : app(SalesIntake::class)->receiveNative($request, $conversation, $input['client_nonce']);
+
+            return response()->json(['turn_id' => $turn->id, 'status' => $turn->status, 'private_fields' => $nativeCapture['fields'], 'private_ambiguous' => $nativeCapture['ambiguous']], 202)->header('Cache-Control', 'private, no-store');
+        }
         $safeCaptured = $privacy->redact($input['message'], array_values(array_intersect_key($capture['fields'], array_flip(['child_name', 'parent_name', 'phone', 'street']))));
         $mixedRequest = $capture['handled'] && ! $capture['ambiguous'] && preg_match('/(?:قصة|قصه|حكاية|حكايه|باقة|باقه|منتج|نشاط|اشتري|أشتري|ترشح|رشح|بتنصح|بدور)/u', $safeCaptured);
         $intakeFacts = [];
@@ -79,7 +90,12 @@ class SalesAssistantController extends Controller
         if ($capture['handled'] && ! $mixedRequest) {
             $turn = app(SalesIntake::class)->receive($request, $conversation, $input['client_nonce'], $capture);
 
-            return response()->json(['turn_id' => $turn->id, 'status' => $turn->status], 202)->header('Cache-Control', 'private, no-store');
+            return response()->json(['turn_id' => $turn->id, 'status' => $turn->status, 'private_fields' => $capture['fields'], 'private_ambiguous' => $capture['ambiguous']], 202)->header('Cache-Control', 'private, no-store');
+        }
+        if ($private) {
+            $paidRate = 'sales-message:'.$sessions->hash($request);
+            abort_if(RateLimiter::tooManyAttempts($paidRate, (int) config('sales_assistant.per_minute')), 429, 'استنى دقيقة قبل رسائل جديدة.');
+            RateLimiter::hit($paidRate, 60);
         }
         abort_unless(app(SalesSettings::class)->verified() && app(SalesSettings::class)->workerReady(), 503, 'المحادثة الذكية غير متاحة الآن؛ تقدر تكمل بياناتك وطلبك هنا.');
         $text = $privacy->redact($input['message'], $sessions->knownPrivate($request), array_column(app(SalesCatalog::class)->all(), 'title'));

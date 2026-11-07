@@ -5,6 +5,8 @@ if (root) {
     const q = (selector) => root.querySelector(selector);
     const panel = q('[data-panel]'), frame = q('[data-purchase-frame]');
     const composer = q('[data-compose]'), input = composer.querySelector('textarea');
+    const dialogue=document.createElement('section');dialogue.className='hk-sales-dialogue';dialogue.dataset.dialogue='';q('[data-workspace]').prepend(dialogue);
+    let nativeQuestion=null;
     // Use the actual storefront header and visual viewport, including the mobile keyboard.
     if (root.dataset.full === '1') {
         const fitPage = () => {
@@ -23,7 +25,7 @@ if (root) {
 
     let open = root.dataset.full === '1', state = null, timer = null, polling = false, busy = false, previousSignature = '', nonce = null, lastText = null;
     let refreshQueued = false, submittedTurn = null;
-    const pendingActions = new Set(), consumedActions = new Set();
+    const pendingActions = new Set(), consumedActions = new Set(), localAnswers=new Map();
     let refreshPromise = null, privateStep = null, privateSignature = '', approvedContact = {};
     let abortPoll = null, upsellKey = '', returnFocus = null, interest = '', restoredFrame = false;
     const element = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text) e.textContent = text; return e; };
@@ -74,10 +76,12 @@ if (root) {
         if (signature !== previousSignature) {
             const thread = q('[data-thread]'); thread.replaceChildren();
             for (const turn of state.turns) {
-                thread.append(element('div', 'hk-sales-message hk-sales-message--user', turn.question));
+                const local=localAnswers.get(turn.id);
+                if(local)thread.append(element('div','hk-sales-message',local.question));
+                thread.append(element('div', 'hk-sales-message hk-sales-message--user', local?.text || turn.question));
                 const complete = turn.status === 'completed';
-                thread.append(element('div', `hk-sales-message ${complete ? '' : ['queued','processing'].includes(turn.status) ? 'hk-sales-message--pending':'hk-sales-message--error'}`,
-                    complete ? (checkoutAction(turn,state.cart) ? 'نكمّل طلبك هنا. ابعت البيانات الناقصة في المحادثة أو كمّل الخانة الظاهرة، وبعدها نراجع الطلب والإجمالي قبل التأكيد.' : turn.result?.message) : terminalMessage(turn.status)));
+                if(!local)thread.append(element('div', `hk-sales-message ${complete ? '' : ['queued','processing'].includes(turn.status) ? 'hk-sales-message--pending':'hk-sales-message--error'}`,
+                    complete ? (checkoutAction(turn,state.cart) ? 'نكمّل طلبك هنا. ابعت البيانات الناقصة في المحادثة ، وبعدها نراجع الطلب والإجمالي قبل التأكيد.' : turn.result?.message) : terminalMessage(turn.status)));
                 if (complete && turn.result?.cards?.length) thread.append(cards(turn.result.cards));
                 if(turn===state.turns.at(-1) && checkoutAction(turn,state.cart)) {
                     const action=element('button','hk-sales-checkout-action','نكمّل بيانات الطلب هنا');action.type='button';action.dataset.continueCheckout='';
@@ -85,10 +89,11 @@ if (root) {
                 }
             }
             previousSignature = signature;
-            requestAnimationFrame(() => thread.lastElementChild?.scrollIntoView({block:'start',behavior:'instant'}));
+            if(!nativeQuestion)requestAnimationFrame(() => thread.lastElementChild?.scrollIntoView({block:'start',behavior:'instant'}));
         }
         if (!state.chat_available) notice('الردود الذكية مش متاحة حاليًا؛ البحث والاختيار والسلة شغالين.');
         renderPrivateDetails();
+        if(nativeQuestion)requestAnimationFrame(()=>dialogue.scrollIntoView({block:'start',behavior:'instant'}));
         const latest=state.turns.at(-1);
         if(checkoutAction(latest,state.cart) && !consumedActions.has(latest.id) && (latest.id===submittedTurn || pendingActions.has(latest.id))) {
             consumedActions.add(latest.id);pendingActions.delete(latest.id);
@@ -130,7 +135,7 @@ if (root) {
         const destination=new URL(safe);
         if(destination.pathname.startsWith('/shopping-assistant/item/') && !destination.searchParams.has('_sales_entry')){destination.searchParams.set('_sales_entry',newClientNonce());safe=destination.href;}
         if(!/^\/(?:shopping-assistant\/(?:item\/(?:story|product|package)\/[1-9][0-9]*|cart-edit)|cart|checkout\/success|stories\/[^/]+|shop\/(?:product|package)\/[^/]+)$/.test(destination.pathname))safe=root.dataset.cart;
-        q('[data-workspace]').hidden = false; q('[data-chat-view]').hidden = false; privateStep=null;step(stage);
+        q('[data-workspace]').hidden = false; q('[data-chat-view]').hidden = false; privateStep=null;nativeQuestion=null;dialogue.replaceChildren();frame.hidden=true;step(stage);
         requestAnimationFrame(()=>q('[data-workspace]').scrollIntoView({block:'start',behavior:'instant'}));
         if(state)storageSet(`hk-sales-frame:${state.conversation}`,safe);
         if(frame.src!==safe) frame.src=safe;else if(typeof frame.contentWindow.resumeSalesIntake==='function'){privateStep=frame.contentWindow.resumeSalesIntake();}
@@ -151,6 +156,9 @@ if (root) {
     window.addEventListener('message',event=> {
         if (!trustedFrameMessage(event,frame,location.origin)) return;
         if(['cart','added','complete'].includes(event.data.stage)) refresh();
+        if(event.data.stage==='review' || event.data.stage==='complete'){nativeQuestion=null;privateStep=null;dialogue.replaceChildren();frame.hidden=false;}
+        if(event.data.stage==='conversation-error')notice(event.data.message);
+        if(event.data.stage==='conversation-question')renderQuestion(event.data);
         if(event.data.stage==='question') {
             privateStep=['child_name','child_age','child_gender','parent_name','phone','street'].includes(event.data.field)?event.data.field:null;
             const prompts={child_name:'اكتب اسم الطفل، أو ابعت بياناته مع بعض…',child_age:'عمر الطفل كام سنة؟',child_gender:'ولد ولا بنت؟',parent_name:'اكتب اسم ولي الأمر، أو ابعت الاسم والهاتف والعنوان مع بعض…',phone:'اكتب رقم الموبايل أو واتساب…',street:'اكتب الشارع ورقم العقار…'};input.placeholder=prompts[privateStep] || 'تقدر تبعت البيانات هنا، أو تكمّل الخانة الظاهرة…';
@@ -161,34 +169,36 @@ if (root) {
 
         if(event.data.stage==='complete') { notice('طلبك اتسجل. رقم الطلب وحالته ظاهرين في صفحة التأكيد.'); if(state)storageSet(`hk-sales-frame:${state.conversation}`,''); }
     });
+    function renderQuestion(data) {
+        nativeQuestion=data;privateStep=data.field;q('[data-private-draft]').hidden=true;frame.hidden=!data.upload;
+        dialogue.replaceChildren(element('div','hk-sales-message',data.question));
+        input.placeholder=data.upload?'ارفع الصور من الزر الظاهر…':data.ready?'راجع الاختيار، أو اختار خطوة لتعديلها…':'اكتب إجابتك هنا، وممكن تبعت أكثر من بيان مع بعض…';
+        const options=element('div','hk-sales-chips');
+        for(const option of data.options || []) {
+            const button=element('button','',option.label);button.type='button';button.addEventListener('click',()=>{input.value=option.label;composer.requestSubmit();});options.append(button);
+        }
+        if(options.childElementCount)dialogue.append(options);
+        if(data.field==='child_name' && state?.private_details?.child_name){
+            const use=element('button','hk-sales-checkout-action',`استخدم بيانات ${state.private_details.child_name} لهذا الاختيار`);use.type='button';
+            use.addEventListener('click',()=>{approvedContact=Object.fromEntries(Object.entries(state.private_details).filter(([k])=>['parent_name','phone','street'].includes(k)));frame.contentWindow.applySalesDetails(state.private_details);});dialogue.append(use);
+        }
+        if(data.upload || data.ready){const button=element('button','hk-sales-checkout-action',data.upload?'تم رفع الصور':'متابعة ومراجعة');button.type='button';button.addEventListener('click',()=>frame.contentWindow.salesConversationAction(data.token,data.upload?'photos':'submit'));dialogue.append(button);}
+        if(data.ready) {
+            const details=element('details','hk-sales-edit-answers'),summary=element('summary','','تعديل إجابة سابقة');details.append(summary);
+            for(const field of data.fields || []){const button=element('button','',field.label);button.type='button';button.addEventListener('click',()=>frame.contentWindow.salesConversationAction(field.token,'edit'));details.append(button);}dialogue.append(details);
+        }
+        requestAnimationFrame(()=>dialogue.scrollIntoView({block:'start',behavior:'instant'}));
+    }
     function renderPrivateDetails() {
         const draft=state?.private_details || {}, signature=JSON.stringify(draft);
-        if(signature===privateSignature)return; privateSignature=signature;
-        const box=q('[data-private-draft]');box.replaceChildren();box.hidden=!Object.keys(draft).length;
+        if(signature===privateSignature)return;privateSignature=signature;
+        const box=q('[data-private-draft]');box.replaceChildren();box.hidden=!Object.keys(draft).length || !!nativeQuestion;
         if(box.hidden)return;
-        box.append(element('h3','','راجع البيانات اللي فهمتها'));
-        box.append(element('p','hk-sales-card-meta','مسودة خاصة. استخدامها للطفل الحالي باختيارك، والطلب هيتسجل بعد المراجعة والتأكيد.'));
-        const names={child_name:'اسم الطفل',child_age:'عمر الطفل',child_gender:'نوع الطفل',parent_name:'اسم ولي الأمر',phone:'رقم الهاتف',street:'الشارع ورقم العقار'};
-        const controls={};
-        for(const [key,value] of Object.entries(draft)) {
-            if(!names[key])continue;
-            const label=element('label','',names[key]),control=element(key==='child_gender'?'select':'input');
-            if(key==='child_gender'){for(const [v,t] of [['boy','ولد'],['girl','بنت']]){const option=element('option','',t);option.value=v;control.append(option);}}
-            else control.type=key==='phone'?'tel':key==='child_age'?'number':'text';
-            control.value=String(value);control.dataset.privateField=key;if(key==='phone')control.dir='ltr';label.append(control);controls[key]=control;box.append(label);
-        }
-        const apply=element('button','','استخدم البيانات دي في الخطوة الحالية');apply.type='button';
-        apply.addEventListener('click',()=> {
-            try {
-                if(q('[data-workspace]').hidden || typeof frame.contentWindow.applySalesDetails!=='function'){notice('اختار القصة أو المنتج الأول، وبعدها استخدم البيانات هنا.');return;}
-                const values=Object.fromEntries(Object.entries(controls).map(([k,c])=>[k,c.value]));
-                approvedContact=Object.fromEntries(Object.entries(values).filter(([key])=>['parent_name','phone','street'].includes(key)));
-                const count=frame.contentWindow.applySalesDetails(values);
-                notice(count?'تم ملء الخانات الناقصة. راجعها وكمّل الصور وباقي البيانات.':'الخانات دي مليانة بالفعل أو تخص خطوة تانية. تقدر تعدّلها مباشرة في الخطوة الظاهرة.');
-                q('[data-workspace]').scrollIntoView({block:'start',behavior:'instant'});
-            }catch{notice('استنى تحميل الخطوة، وبعدها جرّب استخدام البيانات.');}
-        });box.append(apply);
-        requestAnimationFrame(()=>box.scrollIntoView({block:'start',behavior:'instant'}));
+        const names={child_name:'اسم الطفل',child_age:'العمر',child_gender:'النوع',parent_name:'اسم ولي الأمر',phone:'الهاتف',street:'العنوان'};
+        box.append(element('p','','البيانات اللي بعتها محفوظة بشكل خاص. تقدر تستخدمها لاختيارك الحالي:'));
+        for(const [key,value] of Object.entries(draft))if(names[key])box.append(element('p','',`${names[key]}: ${key==='child_gender'?(value==='girl'?'بنت':'ولد'):value}`));
+        const apply=element('button','','استخدم البيانات للاختيار الحالي');apply.type='button';
+        apply.addEventListener('click',()=>{if(!nativeQuestion || typeof frame.contentWindow.applySalesDetails!=='function'){notice('اختار القصة أو المنتج الأول.');return;}approvedContact=Object.fromEntries(Object.entries(draft).filter(([k])=>['parent_name','phone','street'].includes(k)));frame.contentWindow.applySalesDetails(draft);box.hidden=true;});box.append(apply);
     }
     async function offerUpsells() {
         if(!state || state.upsell_declined) return;
@@ -214,7 +224,13 @@ if (root) {
         try {
             if(!state) await refresh();
             if(text!==lastText || !nonce){nonce=newClientNonce();lastText=text;}
-            const receipt=await api(root.dataset.message,{message:text,client_nonce:nonce,...(privateStep?{private_step:privateStep}:{})});submittedTurn=receipt.turn_id;input.value='';nonce=null;lastText=null;
+            const answering=nativeQuestion, receipt=await api(root.dataset.message,{message:text,client_nonce:nonce,...(privateStep?{private_step:privateStep}:{})});submittedTurn=receipt.turn_id;input.value='';nonce=null;lastText=null;
+            if(receipt.private_ambiguous)notice('نكمّل طفل واحد في كل مرة. ابعت بيانات الطفل الحالي بس.');
+            if(answering && !receipt.private_ambiguous && receipt.status==='completed' && Object.hasOwn(receipt,'private_fields')){
+                localAnswers.set(receipt.turn_id,{text,question:answering.question});
+                approvedContact={...approvedContact,...Object.fromEntries(Object.entries(receipt.private_fields).filter(([k])=>['parent_name','phone','street'].includes(k)))};
+                const result=frame.contentWindow.salesConversationAnswer(answering.token,text,receipt.private_fields);if(!result.accepted)notice(result.message);
+            }
             await refresh();
         } catch(error){notice(error.message);await refresh();}
         finally {busy=false;q('[data-send]').disabled=pending();}
