@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { shouldPoll, trustedFrameMessage, publicUrl, terminalMessage, newClientNonce } from '../../resources/js/sales-assistant-state.js';
+import { shouldPoll, trustedFrameMessage, publicUrl, terminalMessage, newClientNonce, checkoutAction } from '../../resources/js/sales-assistant-state.js';
 test('polling stops while hidden, closed, idle or already polling',()=>{
     assert.equal(shouldPoll({open:true,hidden:false,pending:true,working:false}),true);
     for(const change of [{open:false},{hidden:true},{pending:false},{working:true}]) assert.equal(shouldPoll({open:true,hidden:false,pending:true,working:false,...change}),false);
@@ -22,4 +22,12 @@ test('uncertain provider replies explain no automatic paid retry',()=>{assert.ma
 test('secure UUID fallback works when randomUUID is unavailable and rejects missing crypto',()=>{
     assert.match(newClientNonce({getRandomValues:bytes=>bytes.fill(42)}),/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     assert.throws(()=>newClientNonce({}));
+});
+
+test('checkout action opens only a current populated cart and cannot submit an order',()=>{
+ const turn={status:'completed',result:{next:'cart',url:'https://attacker.test/admin'}};
+ assert.equal(checkoutAction(turn,{line_count:1}),true);
+ for(const cart of [undefined,{line_count:0},{line_count:-1},{line_count:'1'}])assert.equal(checkoutAction(turn,cart),false);
+ for(const next of ['discover','choose','handoff','confirm','admin'])assert.equal(checkoutAction({...turn,result:{next}},{line_count:1}),false);
+ assert.equal(checkoutAction({...turn,status:'queued'},{line_count:1}),false);
 });

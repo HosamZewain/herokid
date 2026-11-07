@@ -103,4 +103,18 @@ class SalesAssistantIntakeTest extends TestCase
         }
         $this->assertDatabaseCount('orders', 0);
     }
+
+    public function test_model_cart_summary_exposes_only_draft_presence_and_still_requires_delivery_and_confirmation(): void
+    {
+        $this->postJson(route('sales.message'), ['message' => 'اسم ولي الأمر: مريم أحمد، رقم الموبايل: 01012345678، العنوان: 12 شارع الورد', 'client_nonce' => (string) Str::uuid()])->assertStatus(202);
+        $this->withSession(['cart.items' => ['synthetic-line' => ['story_id' => $this->salesStory()->id, 'child_name' => 'طفل سري', 'uploaded_photos' => ['private/synthetic.png']]]]);
+        $response = $this->postJson(route('sales.state'))->assertOk();
+        $response->assertJsonPath('cart.checkout.cart_is_submitted_order', false)->assertJsonPath('cart.checkout.delivery_review_required', true)->assertJsonPath('cart.checkout.confirmation_required', true);
+        $cart = $response->json('cart');
+        $this->assertContains('phone', $cart['private_intake_fields_present']);
+        foreach (['مريم أحمد', '01012345678', 'شارع الورد', 'طفل سري', 'private/synthetic.png'] as $value) {
+            $this->assertStringNotContainsString($value, json_encode($cart, JSON_UNESCAPED_UNICODE));
+        }
+        Http::assertNothingSent();
+    }
 }

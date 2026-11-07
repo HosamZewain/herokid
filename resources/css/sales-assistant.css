@@ -25,3 +25,5 @@
 .hk-sales-private-draft input,.hk-sales-private-draft select{width:100%;min-width:0;font-size:16px;border:1px solid #d8d0f3;border-radius:10px;padding:10px}
 .hk-sales-private-draft>button{min-height:46px;border-radius:12px;background:var(--sales-purple);color:#fff;font-size:15px;font-weight:800;padding:8px}
 @media(max-width:420px){.hk-sales-private-draft{grid-template-columns:1fr}.hk-sales-workbar span{width:100%;order:3}}
+
+.hk-sales-checkout-action{display:block;min-height:48px;border-radius:12px;padding:10px 18px;background:var(--sales-purple);color:#fff;font-size:16px;font-weight:800;margin:12px 0 18px}

@@ -225,4 +225,48 @@ class SalesAssistantConversationQualityTest extends TestCase
         $this->assertSame($raw, $turn->fresh()->getRawOriginal('result'));
         $this->assertSame(230, $turn->fresh()->spent_micros);
     }
+
+    public function test_cart_completion_is_delivery_navigation_not_a_submitted_order_or_refusal_to_collect_details(): void
+    {
+        $this->salesEnabled();
+        $this->salesStory();
+        $turn = app(SalesBudget::class)->reserve($this->salesConversation(), 'ممكن ابعتلك البيانات وتكملي الاوردر؟', (string) Str::uuid());
+        $reply = $this->salesReply([['key' => 'story:99999999', 'reason' => 'اقتراح غير موثوق يجب إسقاطه دون تعطيل السلة الحالية']], 'مش محتاجة تبعتيها هنا. بيانات التخصيص والصور مكتملة.');
+        $parsed = json_decode($reply['output'][0]['content'][0]['text'], true);
+        $parsed['next'] = 'cart';
+        $reply['output'][0]['content'][0]['text'] = json_encode($parsed);
+        Http::fake(['*' => Http::response($reply)]);
+        $cart = ['line_count' => 1, 'items' => [['title' => 'قصة', 'has_child_data' => true, 'has_photos' => true]],
+            'checkout' => ['cart_is_submitted_order' => false, 'delivery_review_required' => true, 'confirmation_required' => true],
+            'private_intake_fields_present' => []];
+        $answer = app(SalesProvider::class)->answer($turn, $cart);
+        $this->assertSame('cart', $answer['result']['next']);
+        $this->assertStringContainsString('نكمّل طلبك هنا', $answer['result']['message']);
+        $this->assertStringNotContainsString('مش محتاجة', $answer['result']['message']);
+        $this->assertStringContainsString('قبل تأكيد الطلب', $answer['result']['message']);
+        $this->assertDatabaseCount('orders', 0);
+        Http::assertSent(function ($request) {
+            $data = json_decode($request->data()['input'][0]['content'], true);
+            $this->assertFalse($data['current_cart']['checkout']['cart_is_submitted_order']);
+            $this->assertTrue($data['current_cart']['checkout']['delivery_review_required']);
+            $this->assertSame('gpt-6-luna', $request->data()['model']);
+
+            return true;
+        });
+    }
+
+    public function test_empty_cart_cannot_be_presented_as_an_existing_order_for_checkout(): void
+    {
+        $this->salesEnabled();
+        $turn = app(SalesBudget::class)->reserve($this->salesConversation(), 'عاوز اعمل اوردر', (string) Str::uuid());
+        $reply = $this->salesReply([], 'الأوردر موجود ومكتمل');
+        $parsed = json_decode($reply['output'][0]['content'][0]['text'], true);
+        $parsed['next'] = 'cart';
+        $reply['output'][0]['content'][0]['text'] = json_encode($parsed);
+        Http::fake(['*' => Http::response($reply)]);
+        $answer = app(SalesProvider::class)->answer($turn, ['line_count' => 0, 'items' => []]);
+        $this->assertSame('discover', $answer['result']['next']);
+        $this->assertStringContainsString('السلة فاضية', $answer['result']['message']);
+        $this->assertDatabaseCount('orders', 0);
+    }
 }

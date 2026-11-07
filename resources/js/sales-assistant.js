@@ -1,4 +1,4 @@
-import { shouldPoll, trustedFrameMessage, publicUrl, terminalMessage, newClientNonce } from './sales-assistant-state.js';
+import { shouldPoll, trustedFrameMessage, publicUrl, terminalMessage, newClientNonce, checkoutAction } from './sales-assistant-state.js';
 
 const root = document.querySelector('[data-sales-assistant]');
 if (root) {
@@ -22,7 +22,8 @@ if (root) {
     }
 
     let open = root.dataset.full === '1', state = null, timer = null, polling = false, busy = false, previousSignature = '', nonce = null, lastText = null;
-    let refreshQueued = false;
+    let refreshQueued = false, submittedTurn = null;
+    const pendingActions = new Set(), consumedActions = new Set();
     let refreshPromise = null, privateStep = null, privateSignature = '', approvedContact = {};
     let abortPoll = null, upsellKey = '', returnFocus = null, interest = '', restoredFrame = false;
     const element = (tag, className, text) => { const e = document.createElement(tag); if (className) e.className = className; if (text) e.textContent = text; return e; };
@@ -56,7 +57,8 @@ if (root) {
                 const next = await api(root.dataset.state, {}, abortPoll.signal);
                 const changedConversation = state && state.conversation !== next.conversation;
                 state = next;
-                if (changedConversation) { privateStep=null;privateSignature='';approvedContact={};frame.removeAttribute('src'); q('[data-workspace]').hidden = true; q('[data-chat-view]').hidden = false; notice('بدأت جلسة جديدة. راجع السلة والصور قبل التأكيد.'); }
+                for(const turn of state.turns)if(['queued','processing'].includes(turn.status))pendingActions.add(turn.id);
+                if (changedConversation) { privateStep=null;privateSignature='';approvedContact={};submittedTurn=null;pendingActions.clear();consumedActions.clear();frame.removeAttribute('src'); q('[data-workspace]').hidden = true; q('[data-chat-view]').hidden = false; notice('بدأت جلسة جديدة. راجع السلة والصور قبل التأكيد.'); }
                 render();
                 if(!restoredFrame && root.dataset.full==='1') {restoredFrame=true;const saved=storageGet(`hk-sales-frame:${state.conversation}`);if(saved && !saved.includes('/checkout/success'))purchase(saved);}
             } catch (error) { if (error.name !== 'AbortError') notice(error.message); }
@@ -68,21 +70,31 @@ if (root) {
         q('[data-cart-count]').textContent = state.cart.line_count;
         q('.hk-sales-welcome').hidden = state.turns.length > 0;
         q('[data-send]').disabled = busy || pending();
-        const signature = JSON.stringify(state.turns);
+        const signature = JSON.stringify([state.turns,state.cart.line_count]);
         if (signature !== previousSignature) {
             const thread = q('[data-thread]'); thread.replaceChildren();
             for (const turn of state.turns) {
                 thread.append(element('div', 'hk-sales-message hk-sales-message--user', turn.question));
                 const complete = turn.status === 'completed';
                 thread.append(element('div', `hk-sales-message ${complete ? '' : ['queued','processing'].includes(turn.status) ? 'hk-sales-message--pending':'hk-sales-message--error'}`,
-                    complete ? turn.result?.message : terminalMessage(turn.status)));
+                    complete ? (checkoutAction(turn,state.cart) ? 'نكمّل طلبك هنا. ابعت البيانات الناقصة في المحادثة أو كمّل الخانة الظاهرة، وبعدها نراجع الطلب والإجمالي قبل التأكيد.' : turn.result?.message) : terminalMessage(turn.status)));
                 if (complete && turn.result?.cards?.length) thread.append(cards(turn.result.cards));
+                if(turn===state.turns.at(-1) && checkoutAction(turn,state.cart)) {
+                    const action=element('button','hk-sales-checkout-action','نكمّل بيانات الطلب هنا');action.type='button';action.dataset.continueCheckout='';
+                    action.addEventListener('click',()=>purchase(root.dataset.cart));thread.append(action);
+                }
             }
             previousSignature = signature;
             requestAnimationFrame(() => thread.lastElementChild?.scrollIntoView({block:'start',behavior:'instant'}));
         }
         if (!state.chat_available) notice('الردود الذكية مش متاحة حاليًا؛ البحث والاختيار والسلة شغالين.');
         renderPrivateDetails();
+        const latest=state.turns.at(-1);
+        if(checkoutAction(latest,state.cart) && !consumedActions.has(latest.id) && (latest.id===submittedTurn || pendingActions.has(latest.id))) {
+            consumedActions.add(latest.id);pendingActions.delete(latest.id);
+            // Keep any in-progress child/photo form. The explicit action remains available.
+            if(q('[data-workspace]').hidden)requestAnimationFrame(()=>purchase(root.dataset.cart));
+        }
         if (state.upsell_declined) q('[data-upsells]').hidden = true;
     }
     function cards(items) {
@@ -119,9 +131,9 @@ if (root) {
         if(destination.pathname.startsWith('/shopping-assistant/item/') && !destination.searchParams.has('_sales_entry')){destination.searchParams.set('_sales_entry',newClientNonce());safe=destination.href;}
         if(!/^\/(?:shopping-assistant\/(?:item\/(?:story|product|package)\/[1-9][0-9]*|cart-edit)|cart|checkout\/success|stories\/[^/]+|shop\/(?:product|package)\/[^/]+)$/.test(destination.pathname))safe=root.dataset.cart;
         q('[data-workspace]').hidden = false; q('[data-chat-view]').hidden = false; privateStep=null;step(stage);
-        q('[data-workspace]').scrollIntoView({block:'start',behavior:'instant'});
+        requestAnimationFrame(()=>q('[data-workspace]').scrollIntoView({block:'start',behavior:'instant'}));
         if(state)storageSet(`hk-sales-frame:${state.conversation}`,safe);
-        if(frame.src!==safe) frame.src=safe;
+        if(frame.src!==safe) frame.src=safe;else if(typeof frame.contentWindow.resumeSalesIntake==='function'){privateStep=frame.contentWindow.resumeSalesIntake();}
         q('[data-frame-status]').textContent='بنجهّز الخطوة التالية…';
     }
     q('[data-chat]').addEventListener('click',()=> { q('[data-workspace]').hidden=true;q('[data-chat-view]').hidden=false;privateStep=null;if(state)storageSet(`hk-sales-frame:${state.conversation}`,'');step(0);input.focus();refresh(); });
@@ -141,7 +153,8 @@ if (root) {
         if(['cart','added','complete'].includes(event.data.stage)) refresh();
         if(event.data.stage==='question') {
             privateStep=['child_name','child_age','child_gender','parent_name','phone','street'].includes(event.data.field)?event.data.field:null;
-            q('[data-workspace]').scrollIntoView({block:'nearest',behavior:'instant'});
+            const prompts={child_name:'اكتب اسم الطفل، أو ابعت بياناته مع بعض…',child_age:'عمر الطفل كام سنة؟',child_gender:'ولد ولا بنت؟',parent_name:'اكتب اسم ولي الأمر، أو ابعت الاسم والهاتف والعنوان مع بعض…',phone:'اكتب رقم الموبايل أو واتساب…',street:'اكتب الشارع ورقم العقار…'};input.placeholder=prompts[privateStep] || 'تقدر تبعت البيانات هنا، أو تكمّل الخانة الظاهرة…';
+            requestAnimationFrame(()=>q('[data-workspace]').scrollIntoView({block:'start',behavior:'instant'}));
         }
         if(event.data.stage==='resize' && Number.isFinite(event.data.height)) frame.style.height=`${Math.max(180,Math.min(2400,event.data.height))}px`;
         if(event.data.stage==='added') {privateStep=null;notice('اتضاف اختيارك. نكمّل بيانات التوصيل هنا، أو اختار «إضافة اختيار آخر».');offerUpsells();}
@@ -201,7 +214,7 @@ if (root) {
         try {
             if(!state) await refresh();
             if(text!==lastText || !nonce){nonce=newClientNonce();lastText=text;}
-            await api(root.dataset.message,{message:text,client_nonce:nonce,...(privateStep?{private_step:privateStep}:{})});input.value='';nonce=null;lastText=null;
+            const receipt=await api(root.dataset.message,{message:text,client_nonce:nonce,...(privateStep?{private_step:privateStep}:{})});submittedTurn=receipt.turn_id;input.value='';nonce=null;lastText=null;
             await refresh();
         } catch(error){notice(error.message);await refresh();}
         finally {busy=false;q('[data-send]').disabled=pending();}

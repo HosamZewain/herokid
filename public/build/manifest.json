@@ -46,7 +46,7 @@
     ]
   },
   "resources/css/sales-assistant.css": {
-    "file": "assets/sales-assistant-z1ktcr4L.css",
+    "file": "assets/sales-assistant-oOFoDjPk.css",
     "src": "resources/css/sales-assistant.css",
     "isEntry": true,
     "name": "sales-assistant",
@@ -122,7 +122,7 @@
     "isEntry": true
   },
   "resources/js/sales-assistant-embed.js": {
-    "file": "assets/sales-assistant-embed-BEe-E_TN.js",
+    "file": "assets/sales-assistant-embed-BYVCcyPf.js",
     "name": "sales-assistant-embed",
     "src": "resources/js/sales-assistant-embed.js",
     "isEntry": true,
@@ -131,7 +131,7 @@
     ]
   },
   "resources/js/sales-assistant.js": {
-    "file": "assets/sales-assistant-BpyogV8B.js",
+    "file": "assets/sales-assistant-0bVJSY_D.js",
     "name": "sales-assistant",
     "src": "resources/js/sales-assistant.js",
     "isEntry": true

@@ -111,5 +111,6 @@ export function startSalesIntake(report) {
     const controlsFor = node => [...node.querySelectorAll('input,select,textarea')].filter(c => c.type !== 'hidden' && !c.disabled);
     // Metadata only crosses the frame boundary; no customer values or photos.
     const resize = () => report('resize', {height: Math.ceil(shell.getBoundingClientRect().height + 32)});
+    window.resumeSalesIntake = () => {show(false);resize();return fields[current]?.field || null;};
     new ResizeObserver(resize).observe(shell); resize();
 }
